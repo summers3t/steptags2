@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dashboard · StepTags Pro</title>
+    <meta name="description" content="Your projects and recent activity." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        html,
+        body {
+            height: 100%
+        }
+
+        body {
+            font-family: Inter, system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif
+        }
+
+        .gradient-text {
+            background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent
+        }
+
+        @media (prefers-reduced-motion:no-preference) {
+            .card-hover {
+                transition: transform .25s cubic-bezier(.2, .8, .2, 1), box-shadow .25s cubic-bezier(.2, .8, .2, 1)
+            }
+
+            .card-hover:hover {
+                transform: translateY(-6px);
+                box-shadow: 0 25px 50px -12px rgba(0, 0, 0, .25)
+            }
+        }
+    </style>
+    <script defer src="https://cdn.jsdelivr.net/npm/feather-icons@4.29.2/dist/feather.min.js"></script>
+</head>
+
+<body class="bg-gray-50 text-gray-900 antialiased">
+    <header
+        class="bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/60 sticky top-0 z-40 border-b border-gray-100">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="h-16 flex items-center justify-between">
+                <a href="dashboard.html" class="flex items-center gap-2">
+                    <span class="inline-flex items-center justify-center rounded-xl bg-indigo-50 p-2">
+                        <i data-feather="tag" class="w-5 h-5 text-indigo-600" aria-hidden="true"></i>
+                    </span>
+                    <span class="text-xl font-bold">StepTags <span class="gradient-text">Pro</span></span>
+                </a>
+                <div class="flex items-center gap-2">
+                    <button
+                        class="relative rounded-full p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                        aria-label="Notifications">
+                        <i data-feather="bell" class="w-5 h-5" aria-hidden="true"></i>
+                        <span id="notif-dot"
+                            class="absolute -top-0.5 -right-0.5 hidden h-2 w-2 rounded-full bg-red-500"></span>
+                    </button>
+                    <div class="relative" id="user-menu-root">
+                        <button id="user-menu-btn"
+                            class="inline-flex items-center gap-2 rounded-full pl-1 pr-2 py-1 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                            aria-haspopup="menu" aria-expanded="false">
+                            <img id="avatar" src="https://i.pravatar.cc/64?img=42" alt="Avatar"
+                                class="w-8 h-8 rounded-full" />
+                            <span id="display-name"
+                                class="hidden sm:inline text-sm font-medium text-gray-700">User</span>
+                            <i data-feather="chevron-down" class="w-4 h-4 text-gray-500" aria-hidden="true"></i>
+                        </button>
+                        <div id="user-menu"
+                            class="hidden absolute right-0 mt-2 w-48 rounded-md border border-gray-200 bg-white shadow-md"
+                            role="menu" aria-labelledby="user-menu-btn">
+                            <a href="#" class="block px-4 py-2 text-sm hover:bg-gray-50" role="menuitem">Profile</a>
+                            <a href="#" class="block px-4 py-2 text-sm hover:bg-gray-50" role="menuitem">Settings</a>
+                            <a id="logout-link" href="#" class="block px-4 py-2 text-sm hover:bg-gray-50"
+                                role="menuitem">Sign out</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+            <h1 class="text-2xl font-bold">My Projects</h1>
+            <a href="newproject.html" id="btn-new-project"
+                class="inline-flex items-center gap-2 px-4 py-2 rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/50">
+                <i data-feather="plus" class="w-4 h-4" aria-hidden="true"></i>
+                New Project
+            </a>
+        </div>
+
+        <section aria-label="Project list">
+            <div id="projects-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+            <template id="project-card-tpl">
+                <article class="bg-white rounded-2xl border border-gray-100 p-6 card-hover shadow-sm hover:shadow-xl">
+                    <div class="flex justify-between items-start">
+                        <h2 class="text-lg font-semibold" data-prop="title"></h2>
+                        <div class="flex items-center gap-2">
+                            <button
+                                class="p-1.5 rounded-md text-gray-500 hover:text-indigo-600 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                                aria-label="Edit project">
+                                <i data-feather="edit-2" class="w-4 h-4" aria-hidden="true"></i>
+                            </button>
+                            <button
+                                class="p-1.5 rounded-md text-gray-500 hover:text-indigo-600 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                                aria-label="Delete project">
+                                <i data-feather="trash-2" class="w-4 h-4" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <p class="mt-2 text-sm text-gray-600" data-prop="description"></p>
+                    <div class="mt-4 flex items-center text-sm text-gray-500">
+                        <i data-feather="calendar" class="w-4 h-4 mr-1" aria-hidden="true"></i>
+                        <span data-prop="due"></span>
+                    </div>
+                    <a class="mt-4 inline-flex items-center text-sm text-indigo-600 hover:text-indigo-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                        data-prop="manageTeam">
+                        <div class="flex -space-x-2 mr-2" data-prop="avatars"></div>
+                        Manage Team
+                    </a>
+                </article>
+            </template>
+        </section>
+
+        <section class="mt-10" aria-label="Recent activity">
+            <h2 class="text-lg font-semibold mb-4">Recent Activity</h2>
+            <ul id="activity-list"
+                class="bg-white rounded-2xl border border-gray-100 shadow-sm divide-y divide-gray-100"></ul>
+            <template id="activity-item-tpl">
+                <li class="p-4 flex items-start gap-3">
+                    <img data-prop="avatar" alt="" class="w-8 h-8 rounded-full" />
+                    <div>
+                        <p class="text-sm" data-prop="line"></p>
+                        <p class="text-xs text-gray-400 mt-1" data-prop="when"></p>
+                    </div>
+                </li>
+            </template>
+        </section>
+    </main>
+
+    <div id="team-modal" class="fixed inset-0 z-50 hidden" aria-hidden="true">
+        <div id="team-overlay" class="absolute inset-0 bg-black/40 z-40"></div>
+        <div class="flex items-center justify-center min-h-screen p-4 relative z-50">
+            <div class="w-full max-w-lg bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+                <div class="p-5 border-b border-gray-100 flex items-start justify-between">
+                    <h3 id="team-title" class="text-lg font-semibold">Project Team</h3>
+                    <button id="team-close"
+                        class="p-2 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                        aria-label="Close">
+                        <i data-feather="x" class="w-5 h-5" aria-hidden="true"></i>
+                    </button>
+                </div>
+                <div class="p-5">
+                    <div class="flex items-center justify-between mb-4">
+                        <h4 class="font-medium">Team Members</h4>
+                        <button id="team-add"
+                            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-white bg-indigo-600 hover:bg-indigo-700 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50">
+                            <i data-feather="plus" class="w-4 h-4" aria-hidden="true"></i>
+                            Add Member
+                        </button>
+                    </div>
+                    <ul id="team-list" class="space-y-3"></ul>
+                    <template id="team-item-tpl">
+                        <li class="flex items-center justify-between p-2 rounded-lg border border-gray-200">
+                            <div class="flex items-center gap-3">
+                                <img data-prop="avatar" alt="" class="w-8 h-8 rounded-full" />
+                                <div>
+                                    <p class="text-sm font-medium leading-5" data-prop="name"></p>
+                                    <p class="text-xs text-gray-500" data-prop="email"></p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <label class="sr-only">Role</label>
+                                <select data-prop="role" class="text-sm border rounded-md px-2 py-1">
+                                    <option value="owner">Owner</option>
+                                    <option value="admin">Admin</option>
+                                    <option value="member">Member</option>
+                                    <option value="guest">Viewer</option>
+                                </select>
+                                <button
+                                    class="p-1.5 rounded-md text-red-600 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500/40"
+                                    data-prop="remove" aria-label="Remove">
+                                    <i data-feather="trash-2" class="w-4 h-4" aria-hidden="true"></i>
+                                </button>
+                            </div>
+                        </li>
+                    </template>
+                </div>
+                <div class="p-4 border-t border-gray-100 flex items-center justify-end gap-2">
+                    <button id="team-save"
+                        class="inline-flex items-center px-4 py-2 rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/50">Save
+                        Changes</button>
+                    <button id="team-cancel"
+                        class="inline-flex items-center px-4 py-2 rounded-md border border-gray-300 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-400/50">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => { window.feather && window.feather.replace(); });
+        (function dropdown() { const b = document.getElementById('user-menu-btn'), m = document.getElementById('user-menu'), r = document.getElementById('user-menu-root'); function c() { m.classList.add('hidden'); b?.setAttribute('aria-expanded', 'false') } function t() { m.classList.toggle('hidden'); b?.setAttribute('aria-expanded', m.classList.contains('hidden') ? 'false' : 'true') } b?.addEventListener('click', e => { e.stopPropagation(); t() }); document.addEventListener('click', e => { if (r && !r.contains(e.target)) c() }); document.addEventListener('keydown', e => { if (e.key === 'Escape') c() }) })();
+        (function teamModal() { const modal = document.getElementById('team-modal'), overlay = document.getElementById('team-overlay'), title = document.getElementById('team-title'), btnClose = document.getElementById('team-close'), btnCancel = document.getElementById('team-cancel'), btnSave = document.getElementById('team-save'); function open(p) { title.textContent = p + ' · Team'; modal.classList.remove('hidden'); document.body.style.overflow = 'hidden'; btnClose.focus() } function close() { modal.classList.add('hidden'); document.body.style.overflow = '' } window.__openTeamModal = open;[btnClose, btnCancel, btnSave].forEach(b => b?.addEventListener('click', close)); overlay?.addEventListener('click', close); document.addEventListener('keydown', e => { if (e.key === 'Escape') close() }) })();
+    </script>
+
+    <script type="module" src="/js/supabase.js"></script>
+    <script type="module" src="/js/api.js"></script>
+    <script type="module">
+        import { supabase, requireAuth } from '/js/supabase.js';
+        import { hardSignOut } from '/js/devtools.js';
+        import { getProfile, resolveAvatarUrl, resolveDisplayName } from '/js/api.js';
+
+        const session = await requireAuth();
+        const user = session.user;
+
+        try {
+            const profile = await getProfile(user.id);
+            document.getElementById('display-name').textContent = resolveDisplayName(user, profile);
+            const avatarSrc = await resolveAvatarUrl(user, profile);
+            if (avatarSrc) document.getElementById('avatar').src = avatarSrc;
+        } catch (e) {
+            console.warn('Profile load failed', e);
+            document.getElementById('display-name').textContent = user.email || 'User';
+            document.getElementById('avatar').src = `https://i.pravatar.cc/64?u=${encodeURIComponent(user?.id || 'anon')}`;
+        }
+
+        document.getElementById('logout-link')?.addEventListener('click', (e) => { e.preventDefault(); hardSignOut(); });
+
+        const listEl = document.getElementById('projects-list');
+        const cardTpl = document.getElementById('project-card-tpl');
+        const { data: projects, error } = await supabase
+            .from('projects')
+            .select('id,title,description,due_date,updated_at')
+            .order('updated_at', { ascending: false });
+
+        if (error) console.error(error);
+        if (!projects || projects.length === 0) {
+            listEl.innerHTML = '<div class="opacity-70 p-6 bg-white rounded-2xl border border-gray-100">No projects yet.</div>';
+        } else {
+            listEl.innerHTML = '';
+            projects.forEach(p => {
+                const node = cardTpl.content.cloneNode(true);
+                node.querySelector('[data-prop="title"]').textContent = p.title ?? '(Untitled)';
+                node.querySelector('[data-prop="description"]').textContent = p.description ?? '';
+                node.querySelector('[data-prop="due"]').textContent = p.due_date ? ('Due: ' + new Date(p.due_date).toLocaleDateString()) : 'No due date';
+                const manage = node.querySelector('[data-prop="manageTeam"]');
+                manage.href = `/projects/project.html?id=${p.id}`;
+                manage.addEventListener('click', (e) => { e.preventDefault(); window.__openTeamModal(p.title ?? 'Project'); });
+                const avatars = node.querySelector('[data-prop="avatars"]');
+                avatars.innerHTML = `
+          <img src="https://i.pravatar.cc/32?img=1" class="w-6 h-6 rounded-full border-2 border-white" alt="">
+          <img src="https://i.pravatar.cc/32?img=2" class="w-6 h-6 rounded-full border-2 border-white" alt="">
+        `;
+                listEl.appendChild(node);
+            });
+            window.feather && window.feather.replace();
+        }
+
+        const actEl = document.getElementById('activity-list');
+        const actTpl = document.getElementById('activity-item-tpl');
+        const { data: activities } = await supabase
+            .from('activities')
+            .select('actor_id, kind, ref_table, meta, created_at, project_id')
+            .order('created_at', { ascending: false })
+            .limit(10);
+
+        actEl.innerHTML = '';
+        (activities || []).forEach(a => {
+            const n = actTpl.content.cloneNode(true);
+            const when = new Date(a.created_at).toLocaleString();
+            const line = `${(a.kind || 'update').replaceAll('_', ' ')} • ${a.ref_table || 'project'}`;
+            n.querySelector('[data-prop="line"]').textContent = line;
+            n.querySelector('[data-prop="when"]').textContent = when;
+            n.querySelector('[data-prop="avatar"]').src = `https://i.pravatar.cc/40?u=${a.actor_id || 'anon'}`;
+            actEl.appendChild(n);
+        });
+
+        supabase.channel('rt-steps')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'steps' }, () => {
+                document.getElementById('notif-dot')?.classList.remove('hidden');
+            })
+            .subscribe();
+    </script>
+</body>
+
+</html>

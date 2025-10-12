@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Create Project · StepTags Pro</title>
+    <meta name="description" content="Create a new project in StepTags Pro." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/feather-icons@4.29.2/dist/feather.min.js"></script>
+
+    <style>
+        html,
+        body {
+            height: 100%
+        }
+
+        body {
+            font-family: Inter, system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+            background: #f9fafb;
+        }
+
+        .gradient-text {
+            background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        @media (prefers-reduced-motion:no-preference) {
+            .card-hover {
+                transition: transform .25s cubic-bezier(.2, .8, .2, 1), box-shadow .25s cubic-bezier(.2, .8, .2, 1), border-color .2s;
+            }
+
+            .card-hover:hover {
+                transform: translateY(-4px);
+                box-shadow: 0 25px 50px -12px rgba(0, 0, 0, .25);
+            }
+
+            .btn-trans {
+                transition: background-color .2s, box-shadow .2s, transform .15s;
+            }
+
+            .btn-trans:hover {
+                transform: translateY(-1px);
+            }
+        }
+
+        .dropzone-hover {
+            outline: 2px dashed rgba(99, 102, 241, .5);
+            outline-offset: 4px;
+        }
+    </style>
+</head>
+
+<body class="text-gray-900 antialiased">
+
+    <!-- Shared header (hydrated by /js/header.js) -->
+    <header
+        class="bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/60 sticky top-0 z-40 border-b border-gray-100">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="h-16 flex items-center justify-between">
+                <a href="dashboard.html" class="flex items-center gap-2">
+                    <span class="inline-flex items-center justify-center rounded-xl bg-indigo-50 p-2">
+                        <i data-feather="tag" class="w-5 h-5 text-indigo-600" aria-hidden="true"></i>
+                    </span>
+                    <span class="text-xl font-bold">StepTags <span class="gradient-text">Pro</span></span>
+                </a>
+                <div class="flex items-center gap-2">
+                    <button
+                        class="relative rounded-full p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 btn-trans"
+                        aria-label="Notifications">
+                        <i data-feather="bell" class="w-5 h-5" aria-hidden="true"></i>
+                        <span id="notif-dot"
+                            class="absolute -top-0.5 -right-0.5 hidden h-2 w-2 rounded-full bg-red-500"></span>
+                    </button>
+                    <div class="relative" id="user-menu-root">
+                        <button id="user-menu-btn"
+                            class="inline-flex items-center gap-2 rounded-full pl-1 pr-2 py-1 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 btn-trans"
+                            aria-haspopup="menu" aria-expanded="false">
+                            <img id="avatar" src="https://i.pravatar.cc/64?img=42" alt="Avatar"
+                                class="w-8 h-8 rounded-full" loading="lazy" decoding="async" />
+                            <span id="display-name"
+                                class="hidden sm:inline text-sm font-medium text-gray-700">User</span>
+                            <i data-feather="chevron-down" class="w-4 h-4 text-gray-500" aria-hidden="true"></i>
+                        </button>
+                        <div id="user-menu"
+                            class="hidden absolute right-0 mt-2 w-48 rounded-md border border-gray-200 bg-white shadow-md"
+                            role="menu" aria-labelledby="user-menu-btn">
+                            <a href="profile.html" class="block px-4 py-2 text-sm hover:bg-gray-50"
+                                role="menuitem">Profile</a>
+                            <a href="settings.html" class="block px-4 py-2 text-sm hover:bg-gray-50"
+                                role="menuitem">Settings</a>
+                            <a id="logout-link" href="#" class="block px-4 py-2 text-sm hover:bg-gray-50"
+                                role="menuitem">Sign out</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="max-w-3xl mx-auto">
+            <a href="dashboard.html"
+                class="inline-flex items-center gap-2 rounded-full bg-white/90 backdrop-blur px-3 py-2 text-gray-700 hover:text-indigo-700 shadow-sm border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 btn-trans"
+                aria-label="Back to dashboard">
+                <i data-feather="arrow-left" class="w-5 h-5" aria-hidden="true"></i>
+                <span class="hidden sm:inline text-sm font-medium">Back</span>
+            </a>
+
+            <h1 class="mt-6 text-2xl font-bold">Create New Project</h1>
+
+            <section class="mt-6 bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                <div id="project-status"
+                    class="hidden mb-4 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-sm px-3 py-2"
+                    role="status"></div>
+
+                <form id="project-form" class="space-y-6" action="#" method="post" novalidate>
+                    <div>
+                        <label for="project-name" class="block text-sm font-medium mb-1">Project Name</label>
+                        <input id="project-name" name="title" type="text" required
+                            class="w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500"
+                            placeholder="My awesome project" />
+                    </div>
+
+                    <div>
+                        <label for="project-description" class="block text-sm font-medium mb-1">Description
+                            <span class="text-gray-400">(optional)</span></label>
+                        <textarea id="project-description" name="description" rows="3"
+                            class="w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500"
+                            placeholder="Briefly describe your project..."></textarea>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="start-date" class="block text-sm font-medium mb-1">Start Date</label>
+                            <input id="start-date" name="start_date" type="text"
+                                class="w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500"
+                                placeholder="Select date" autocomplete="off" />
+                        </div>
+                        <div>
+                            <label for="due-date" class="block text-sm font-medium mb-1">Due Date</label>
+                            <input id="due-date" name="due_date" type="text"
+                                class="w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500"
+                                placeholder="Select date" autocomplete="off" />
+                        </div>
+                    </div>
+
+                    <!-- Background upload -->
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Project Background</label>
+                        <div id="bgDrop"
+                            class="relative rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 text-center cursor-pointer hover:border-indigo-300 hover:bg-indigo-50 card-hover">
+                            <input id="bgFile" type="file" accept="image/*"
+                                class="absolute inset-0 opacity-0 cursor-pointer"
+                                aria-label="Upload background image" />
+                            <div id="bgEmpty" class="flex flex-col items-center justify-center text-gray-600">
+                                <i data-feather="image" class="w-6 h-6 text-indigo-600 mb-2" aria-hidden="true"></i>
+                                <p class="text-sm">Click or drop an image here</p>
+                                <p class="text-xs text-gray-400 mt-1">PNG, JPG. Max 5 MB.</p>
+                            </div>
+                            <div id="bgPreview" class="hidden mt-3">
+                                <div class="relative rounded-lg overflow-hidden shadow">
+                                    <img id="bgImg" src="" alt="Background preview" class="w-full h-40 object-cover" />
+                                    <button type="button" id="bgClear"
+                                        class="absolute top-2 right-2 rounded-full bg-white/90 p-1 text-gray-700 hover:text-red-600 shadow btn-trans"
+                                        aria-label="Remove background">
+                                        <i data-feather="x" class="w-4 h-4"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Team quick-add -->
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Team Members</label>
+                        <div class="mb-3">
+                            <div id="teamMembersList" class="flex -space-x-2"></div>
+                        </div>
+                        <div class="flex flex-col sm:flex-row gap-2">
+                            <input type="email" id="inviteEmail" placeholder="Enter email"
+                                class="flex-1 rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500" />
+                            <label class="sr-only" for="memberRole">Role</label>
+                            <select id="memberRole"
+                                class="rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500">
+                                <option value="member">Member</option>
+                                <option value="admin">Admin</option>
+                                <option value="viewer">Viewer</option>
+                            </select>
+                            <button id="addMemberBtn" type="button"
+                                class="inline-flex items-center gap-2 rounded-md px-4 py-2 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 btn-trans">
+                                <i data-feather="plus" class="w-4 h-4" aria-hidden="true"></i>
+                                Add
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Create with AI -->
+                    <div class="flex items-start gap-3">
+                        <input id="use-ai" type="checkbox"
+                            class="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" />
+                        <label for="use-ai" class="text-sm">
+                            Create this project with AI
+                            <span class="block text-gray-500">We’ll guide you to generate steps, substeps, and
+                                timelines.</span>
+                        </label>
+                    </div>
+
+                    <div class="flex items-center justify-between">
+                        <button type="button" id="openInvite"
+                            class="inline-flex items-center gap-2 rounded-md px-4 py-2 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 btn-trans">
+                            <i data-feather="mail" class="w-4 h-4" aria-hidden="true"></i>
+                            Bulk Invite
+                        </button>
+                        <div class="flex items-center gap-3">
+                            <a href="dashboard.html"
+                                class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-400/50 btn-trans">Cancel</a>
+                            <button type="submit"
+                                class="rounded-md px-4 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 btn-trans">
+                                Continue
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </section>
+        </div>
+    </main>
+
+    <!-- Invite Members Modal -->
+    <div id="inviteModal" class="fixed inset-0 z-50 hidden overflow-y-auto">
+        <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center">
+            <div id="inviteOverlay" class="fixed inset-0 bg-black/40 transition-opacity"></div>
+            <div
+                class="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-xl transform sm:align-middle sm:max-w-lg sm:w-full border border-gray-100">
+                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">Invite Team Members</h3>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Email Addresses (comma
+                            separated)</label>
+                        <textarea id="inviteEmails" rows="3"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500"
+                            placeholder="john@example.com, jane@example.com"></textarea>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                        <select id="bulkRole"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500">
+                            <option value="member">Member</option>
+                            <option value="admin">Admin</option>
+                            <option value="viewer">Viewer</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                    <button type="button" id="sendInvites"
+                        class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">
+                        Send Invites
+                    </button>
+                    <button type="button" id="cancelInvite"
+                        class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page scripts -->
+    <script>
+        // icons
+        document.addEventListener('DOMContentLoaded', () => { window.feather && window.feather.replace(); });
+
+        // Monday-first date pickers
+        const fpOpts = { dateFormat: "Y-m-d", locale: { firstDayOfWeek: 1 } };
+        document.addEventListener('DOMContentLoaded', () => {
+            if (window.flatpickr) {
+                flatpickr("#start-date", fpOpts);
+                flatpickr("#due-date", fpOpts);
+            }
+        });
+
+        // Toast
+        function toast(msg) {
+            const t = document.createElement('div');
+            t.className = 'fixed bottom-4 right-4 px-4 py-2 bg-green-100 text-green-800 rounded-md shadow-md';
+            t.textContent = msg;
+            document.body.appendChild(t);
+            setTimeout(() => t.remove(), 2500);
+        }
+        function avatarFor(email) {
+            const seed = encodeURIComponent(email.trim().toLowerCase());
+            return `https://i.pravatar.cc/32?u=${seed}`;
+        }
+
+        // Team quick add
+        const teamList = document.getElementById('teamMembersList');
+        document.getElementById('addMemberBtn')?.addEventListener('click', () => {
+            const emailEl = document.getElementById('inviteEmail');
+            const roleEl = document.getElementById('memberRole');
+            const email = emailEl.value.trim();
+            if (!email) return;
+            const chip = document.createElement('div');
+            chip.className = 'relative inline-block';
+            chip.innerHTML = `
+        <img src="${avatarFor(email)}" alt="${email}" class="w-8 h-8 rounded-full border-2 border-white" loading="lazy">
+        <span class="absolute -bottom-1 -right-1 bg-indigo-100 text-indigo-800 text-xs px-1 rounded-full">${roleEl.value[0].toUpperCase()}</span>`;
+            teamList.appendChild(chip);
+            emailEl.value = '';
+            toast(`${email} added as ${roleEl.value}`);
+        });
+
+        // Background upload preview
+        const bgFile = document.getElementById('bgFile');
+        const bgPreview = document.getElementById('bgPreview');
+        const bgEmpty = document.getElementById('bgEmpty');
+        const bgImg = document.getElementById('bgImg');
+        const bgClear = document.getElementById('bgClear');
+        const bgDrop = document.getElementById('bgDrop');
+
+        function clearBg() {
+            bgImg.src = '';
+            bgPreview.classList.add('hidden');
+            bgEmpty.classList.remove('hidden');
+            bgFile.value = '';
+        }
+        bgClear?.addEventListener('click', clearBg);
+
+        bgFile?.addEventListener('change', (e) => {
+            const f = e.target.files?.[0];
+            if (!f) return;
+            if (!/^image\//.test(f.type) || f.size > 5 * 1024 * 1024) {
+                toast('Invalid file. Use PNG/JPG up to 5 MB.');
+                clearBg();
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = () => {
+                bgImg.src = reader.result;
+                bgEmpty.classList.add('hidden');
+                bgPreview.classList.remove('hidden');
+            };
+            reader.readAsDataURL(f);
+        });
+
+        ;['dragenter', 'dragover'].forEach((evt) => {
+            bgDrop.addEventListener(evt, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                bgDrop.classList.add('dropzone-hover');
+            });
+        });
+        ;['dragleave', 'drop'].forEach((evt) => {
+            bgDrop.addEventListener(evt, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                bgDrop.classList.remove('dropzone-hover');
+            });
+        });
+        bgDrop.addEventListener('drop', (e) => {
+            const file = e.dataTransfer?.files?.[0];
+            if (file) { bgFile.files = e.dataTransfer.files; bgFile.dispatchEvent(new Event('change')); }
+        });
+
+        // Bulk Invite modal
+        const inviteModal = document.getElementById('inviteModal');
+        const inviteOverlay = document.getElementById('inviteOverlay');
+        function openInviteModal() { inviteModal.classList.remove('hidden'); document.body.style.overflow = 'hidden'; }
+        function closeInviteModal() { inviteModal.classList.add('hidden'); document.body.style.overflow = ''; }
+        document.getElementById('openInvite')?.addEventListener('click', openInviteModal);
+        document.getElementById('cancelInvite')?.addEventListener('click', closeInviteModal);
+        inviteOverlay?.addEventListener('click', closeInviteModal);
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeInviteModal(); });
+        document.getElementById('sendInvites')?.addEventListener('click', () => {
+            const raw = document.getElementById('inviteEmails').value || '';
+            const role = document.getElementById('bulkRole').value;
+            const list = raw.split(',').map(v => v.trim()).filter(Boolean);
+            if (!list.length) { alert('Please enter at least one email address'); return; }
+            toast(`Invites sent to ${list.length} as ${role}`);
+            closeInviteModal();
+        });
+
+        // Submit (client placeholder; real creation is in /js/newproject.js)
+        const statusBox = document.getElementById('project-status');
+        document.getElementById('project-form')?.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const title = document.getElementById('project-name').value.trim();
+            if (!title) {
+                statusBox.textContent = 'Project name is required.';
+                statusBox.classList.remove('hidden');
+                statusBox.focus();
+                return;
+            }
+            if (document.getElementById('use-ai').checked) {
+                window.location.href = 'project-ai.html';
+                return;
+            }
+            statusBox.textContent = 'Project creation will be wired to the backend later.';
+            statusBox.classList.remove('hidden');
+            statusBox.focus();
+        });
+    </script>
+
+    <!-- App boot order: supabase -> api -> header -> page scripts -->
+    <script type="module" src="/js/supabase.js"></script>
+    <script type="module" src="/js/api.js"></script>
+    <script type="module" src="/js/header.js"></script>
+    <script type="module">
+        import { hydrateHeader } from '/js/header.js'
+        import { supabase } from '/js/supabase.js'
+
+        await hydrateHeader()
+        window.feather && window.feather.replace()
+
+        // Optional realtime dot (mirrors dashboard)
+        supabase.channel('rt-steps')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'steps' }, () => {
+                document.getElementById('notif-dot')?.classList.remove('hidden')
+            })
+            .subscribe()
+    </script>
+
+    <!-- Page-specific module (form -> backend wiring) -->
+    <script type="module" src="/js/newproject.js"></script>
+</body>
+
+</html>

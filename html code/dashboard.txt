@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard | StepTags Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/feather-icons"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .gradient-text {
+            background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+        .card-hover:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        .progress-bar {
+            height: 6px;
+            border-radius: 3px;
+            background-color: #e5e7eb;
+        }
+        .progress-fill {
+            height: 100%;
+            border-radius: 3px;
+            background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <header class="bg-white shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-4">
+                <div class="flex items-center">
+                    <i data-feather="tag" class="text-indigo-600 w-8 h-8 mr-3"></i>
+                    <h1 class="text-xl font-bold text-gray-900">StepTags <span class="gradient-text">Pro</span></h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button class="p-2 rounded-full text-gray-500 hover:bg-gray-100">
+                        <i data-feather="bell"></i>
+                    </button>
+                    <div class="relative">
+                        <button id="user-menu" class="flex items-center space-x-2">
+                            <img src="http://static.photos/people/200x200/42" alt="User" class="w-8 h-8 rounded-full">
+                            <span class="text-sm font-medium text-gray-700">John Doe</span>
+                            <i data-feather="chevron-down" class="w-4 h-4 text-gray-500"></i>
+                        </button>
+                        <div id="dropdown-menu" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10">
+                            <div class="py-1">
+                                <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Profile</a>
+                                <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Settings</a>
+                                <a href="index.html" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Sign out</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-2xl font-bold text-gray-900">My Projects</h2>
+            <a href="newproject.html" class="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">
+                <i data-feather="plus" class="w-4 h-4 mr-2"></i> New Project
+            </a>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- Project Card 1 -->
+            <div class="bg-white rounded-lg shadow-md overflow-hidden card-hover">
+                <div class="p-6">
+                    <div class="flex justify-between items-start">
+                        <h3 class="text-lg font-semibold text-gray-900">Website Redesign</h3>
+                        <div class="flex space-x-2">
+                            <button class="text-gray-400 hover:text-indigo-600">
+                                <i data-feather="edit-2" class="w-4 h-4"></i>
+                            </button>
+                            <button class="text-gray-400 hover:text-indigo-600">
+                                <i data-feather="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <p class="mt-2 text-sm text-gray-600">Complete redesign of company website with new UI/UX</p>
+                    
+                    <div class="mt-4">
+                        <div class="flex justify-between text-xs text-gray-500 mb-1">
+                            <span>Progress</span>
+                            <span>65%</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: 65%"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4 flex items-center text-sm text-gray-500">
+                        <i data-feather="calendar" class="w-4 h-4 mr-1"></i>
+                        <span>Due: May 25, 2023</span>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <button onclick="openTeamModal('Website Redesign')" class="flex items-center text-sm text-indigo-600 hover:text-indigo-800">
+                            <div class="flex -space-x-2 mr-2">
+                                <img src="http://static.photos/people/200x200/1" alt="Team member" class="w-6 h-6 rounded-full border-2 border-white">
+                                <img src="http://static.photos/people/200x200/2" alt="Team member" class="w-6 h-6 rounded-full border-2 border-white">
+                                <img src="http://static.photos/people/200x200/3" alt="Team member" class="w-6 h-6 rounded-full border-2 border-white">
+                                <span class="flex items-center justify-center w-6 h-6 rounded-full border-2 border-white bg-gray-100 text-xs">+2</span>
+                            </div>
+                            Manage Team
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Project Card 2 -->
+            <div class="bg-white rounded-lg shadow-md overflow-hidden card-hover">
+                <div class="p-6">
+                    <div class="flex justify-between items-start">
+                        <h3 class="text-lg font-semibold text-gray-900">Mobile App Development</h3>
+                        <div class="flex space-x-2">
+                            <button class="text-gray-400 hover:text-indigo-600">
+                                <i data-feather="edit-2" class="w-4 h-4"></i>
+                            </button>
+                            <button class="text-gray-400 hover:text-indigo-600">
+                                <i data-feather="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <p class="mt-2 text-sm text-gray-600">New iOS and Android app for customer engagement</p>
+                    
+                    <div class="mt-4">
+                        <div class="flex justify-between text-xs text-gray-500 mb-1">
+                            <span>Progress</span>
+                            <span>30%</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: 30%"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4 flex items-center text-sm text-gray-500">
+                        <i data-feather="calendar" class="w-4 h-4 mr-1"></i>
+                        <span>Due: Jun 15, 2023</span>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <button onclick="openTeamModal('Mobile App Development')" class="flex items-center text-sm text-indigo-600 hover:text-indigo-800">
+                            <div class="flex -space-x-2 mr-2">
+                                <img src="http://static.photos/people/200x200/4" alt="Team member" class="w-6 h-6 rounded-full border-2 border-white">
+                                <img src="http://static.photos/people/200x200/5" alt="Team member" class="w-6 h-6 rounded-full border-2 border-white">
+                            </div>
+                            Manage Team
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Project Card 3 -->
+            <div class="bg-white rounded-lg shadow-md overflow-hidden card-hover">
+                <div class="p-6">
+                    <div class="flex justify-between items-start">
+                        <h3 class="text-lg font-semibold text-gray-900">Marketing Campaign</h3>
+                        <div class="flex space-x-2">
+                            <button class="text-gray-400 hover:text-indigo-600">
+                                <i data-feather="edit-2" class="w-4 h-4"></i>
+                            </button>
+                            <button class="text-gray-400 hover:text-indigo-600">
+                                <i data-feather="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <p class="mt-2 text-sm text-gray-600">Q3 digital marketing campaign for product launch</p>
+                    
+                    <div class="mt-4">
+                        <div class="flex justify-between text-xs text-gray-500 mb-1">
+                            <span>Progress</span>
+                            <span>15%</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: 15%"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4 flex items-center text-sm text-gray-500">
+                        <i data-feather="calendar" class="w-4 h-4 mr-1"></i>
+                        <span>Due: Jul 1, 2023</span>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <button onclick="openTeamModal('Marketing Campaign')" class="flex items-center text-sm text-indigo-600 hover:text-indigo-800">
+                            <div class="flex -space-x-2 mr-2">
+                                <img src="http://static.photos/people/200x200/6" alt="Team member" class="w-6 h-6 rounded-full border-2 border-white">
+                                <img src="http://static.photos/people/200x200/7" alt="Team member" class="w-6 h-6 rounded-full border-2 border-white">
+                                <img src="http://static.photos/people/200x200/8" alt="Team member" class="w-6 h-6 rounded-full border-2 border-white">
+                            </div>
+                            Manage Team
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-10">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
+            <div class="bg-white rounded-lg shadow-md overflow-hidden">
+                <ul class="divide-y divide-gray-200">
+                    <li class="p-4">
+                        <div class="flex items-start">
+                            <img src="http://static.photos/people/200x200/2" alt="User" class="w-8 h-8 rounded-full mr-3">
+                            <div>
+                                <p class="text-sm font-medium text-gray-900">Sarah Johnson</p>
+                                <p class="text-sm text-gray-600">Completed "Design homepage mockups" in Website Redesign</p>
+                                <p class="text-xs text-gray-400 mt-1">2 hours ago</p>
+                            </div>
+                        </div>
+                    </li>
+                    <li class="p-4">
+                        <div class="flex items-start">
+                            <img src="http://static.photos/people/200x200/1" alt="User" class="w-8 h-8 rounded-full mr-3">
+                            <div>
+                                <p class="text-sm font-medium text-gray-900">You</p>
+                                <p class="text-sm text-gray-600">Added new task "Setup Firebase" to Mobile App Development</p>
+                                <p class="text-xs text-gray-400 mt-1">5 hours ago</p>
+                            </div>
+                        </div>
+                    </li>
+                    <li class="p-4">
+                        <div class="flex items-start">
+                            <img src="http://static.photos/people/200x200/3" alt="User" class="w-8 h-8 rounded-full mr-3">
+                            <div>
+                                <p class="text-sm font-medium text-gray-900">Michael Chen</p>
+                                <p class="text-sm text-gray-600">Commented on "Marketing Strategy Doc" in Marketing Campaign</p>
+                                <p class="text-xs text-gray-400 mt-1">Yesterday</p>
+                            </div>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Team Management Modal -->
+    <div id="teamModal" class="fixed inset-0 z-50 hidden overflow-y-auto">
+        <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 transition-opacity" aria-hidden="true">
+                <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
+            </div>
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <div class="flex justify-between items-start">
+                        <h3 id="modalProjectName" class="text-lg font-medium text-gray-900">Project Team</h3>
+                        <button onclick="closeTeamModal()" class="text-gray-400 hover:text-gray-500">
+                            <i data-feather="x" class="w-6 h-6"></i>
+                        </button>
+                    </div>
+                    <div class="mt-4">
+                        <div class="flex items-center justify-between mb-4">
+                            <h4 class="font-medium text-gray-900">Team Members</h4>
+                            <button class="flex items-center px-3 py-1 bg-indigo-600 text-white rounded-md text-sm">
+                                <i data-feather="plus" class="w-4 h-4 mr-1"></i> Add Member
+                            </button>
+                        </div>
+                        <div class="space-y-4">
+                            <!-- Team member items will be added here dynamically -->
+                            <div class="flex items-center justify-between p-2 border rounded-lg">
+                                <div class="flex items-center">
+                                    <img src="http://static.photos/people/200x200/1" alt="Team member" class="w-8 h-8 rounded-full mr-3">
+                                    <div>
+                                        <p class="text-sm font-medium">John Doe</p>
+                                        <p class="text-xs text-gray-500">john@example.com</p>
+                                    </div>
+                                </div>
+                                <select class="text-sm border rounded px-2 py-1">
+                                    <option>Lead</option>
+                                    <option>Member</option>
+                                    <option>Viewer</option>
+                                </select>
+                                <button class="text-red-500 hover:text-red-700">
+                                    <i data-feather="trash-2" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                            <div class="flex items-center justify-between p-2 border rounded-lg">
+                                <div class="flex items-center">
+                                    <img src="http://static.photos/people/200x200/2" alt="Team member" class="w-8 h-8 rounded-full mr-3">
+                                    <div>
+                                        <p class="text-sm font-medium">Jane Smith</p>
+                                        <p class="text-xs text-gray-500">jane@example.com</p>
+                                    </div>
+                                </div>
+                                <select class="text-sm border rounded px-2 py-1">
+                                    <option>Lead</option>
+                                    <option selected>Member</option>
+                                    <option>Viewer</option>
+                                </select>
+                                <button class="text-red-500 hover:text-red-700">
+                                    <i data-feather="trash-2" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                    <button type="button" onclick="saveTeamChanges()" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">
+                        Save Changes
+                    </button>
+                    <button type="button" onclick="closeTeamModal()" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        feather.replace();
+
+        function openTeamModal(projectName) {
+            document.getElementById('modalProjectName').textContent = projectName + ' Team';
+            document.getElementById('teamModal').classList.remove('hidden');
+        }
+
+        function closeTeamModal() {
+            document.getElementById('teamModal').classList.add('hidden');
+        }
+
+        function saveTeamChanges() {
+            // Save team changes logic here
+            closeTeamModal();
+        }
+
+        
+        // Dropdown menu functionality
+        const userMenu = document.getElementById('user-menu');
+        const dropdownMenu = document.getElementById('dropdown-menu');
+        
+        userMenu.addEventListener('click', function() {
+            dropdownMenu.classList.toggle('hidden');
+        });
+        
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(event) {
+            if (!userMenu.contains(event.target) && !dropdownMenu.contains(event.target)) {
+                dropdownMenu.classList.add('hidden');
+            }
+        });
+    </script>
+</body>
+</html>

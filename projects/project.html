@@ -1,0 +1,959 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Project · StepTags Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/feather-icons"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.14.0/Sortable.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif
+        }
+
+        .gradient-text {
+            background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent
+        }
+
+        .status-todo {
+            background: #e5e7eb;
+            color: #374151
+        }
+
+        .status-inprogress {
+            background: #93c5fd;
+            color: #1e40af
+        }
+
+        .status-review {
+            background: #fcd34d;
+            color: #92400e
+        }
+
+        .status-done {
+            background: #86efac;
+            color: #065f46
+        }
+
+        .step-item:hover .step-actions {
+            opacity: 1
+        }
+
+        .step-actions {
+            opacity: 0;
+            transition: opacity .2s
+        }
+
+        .file-dropzone {
+            border: 2px dashed #d1d5db
+        }
+
+        .file-dropzone.active {
+            border-color: #3b82f6;
+            background: #f0f7ff
+        }
+    </style>
+</head>
+
+<body class="bg-gray-50">
+    <!-- Shared header (same markup as dashboard, hydrated via /js/header.js) -->
+    <header
+        class="bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/60 sticky top-0 z-40 border-b border-gray-100">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="h-16 flex items-center justify-between">
+                <a href="../dashboard.html" class="flex items-center gap-2">
+                    <span class="inline-flex items-center justify-center rounded-xl bg-indigo-50 p-2">
+                        <i data-feather="tag" class="w-5 h-5 text-indigo-600" aria-hidden="true"></i>
+                    </span>
+                    <span class="text-xl font-bold">StepTags <span class="gradient-text">Pro</span></span>
+                </a>
+                <div class="flex items-center gap-2">
+                    <button
+                        class="relative rounded-full p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                        aria-label="Notifications">
+                        <i data-feather="bell" class="w-5 h-5" aria-hidden="true"></i>
+                        <span class="absolute -top-0.5 -right-0.5 inline-flex h-2 w-2 rounded-full bg-red-500"></span>
+                    </button>
+                    <div class="relative" id="user-menu-root">
+                        <button id="user-menu-btn"
+                            class="inline-flex items-center gap-2 rounded-full pl-1 pr-2 py-1 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                            aria-haspopup="menu" aria-expanded="false">
+                            <img id="avatar" src="https://i.pravatar.cc/64?img=42" alt="Avatar"
+                                class="w-8 h-8 rounded-full" />
+                            <span id="display-name"
+                                class="hidden sm:inline text-sm font-medium text-gray-700">User</span>
+                            <i data-feather="chevron-down" class="w-4 h-4 text-gray-500" aria-hidden="true"></i>
+                        </button>
+                        <div id="user-menu"
+                            class="hidden absolute right-0 mt-2 w-48 rounded-md border border-gray-200 bg-white shadow-md"
+                            role="menu" aria-labelledby="user-menu-btn">
+                            <a href="../profile.html" class="block px-4 py-2 text-sm hover:bg-gray-50"
+                                role="menuitem">Profile</a>
+                            <a href="../settings.html" class="block px-4 py-2 text-sm hover:bg-gray-50"
+                                role="menuitem">Settings</a>
+                            <a id="logout-link" href="#" class="block px-4 py-2 text-sm hover:bg-gray-50"
+                                role="menuitem">Sign out</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div class="flex flex-col md:flex-row gap-6">
+            <!-- Left Sidebar -->
+            <aside class="w-full md:w-1/4">
+                <div class="bg-white rounded-lg shadow p-6 mb-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Project Summary</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <p class="text-sm text-gray-500 mb-1">Status</p>
+                            <p class="text-sm font-medium">In Progress</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-500 mb-1">Start Date</p>
+                            <p class="text-sm font-medium">May 1, 2023</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-500 mb-1">Due Date</p>
+                            <p class="text-sm font-medium">May 25, 2023</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-500 mb-1">Progress</p>
+                            <div class="w-full bg-gray-200 rounded-full h-2.5">
+                                <div class="bg-blue-600 h-2.5 rounded-full" style="width:45%"></div>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1">45% complete</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold text-gray-900">Team</h3>
+                        <button class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">
+                            <i data-feather="plus" class="w-4 h-4 mr-1"></i> Invite
+                        </button>
+                    </div>
+                    <ul class="space-y-3">
+                        <li class="flex items-center">
+                            <img src="https://i.pravatar.cc/64?img=1" alt="" class="w-8 h-8 rounded-full mr-3">
+                            <div>
+                                <p class="text-sm font-medium">John Doe</p>
+                                <p class="text-xs text-gray-500">Project Lead</p>
+                            </div>
+                        </li>
+                        <li class="flex items-center">
+                            <img src="https://i.pravatar.cc/64?img=2" alt="" class="w-8 h-8 rounded-full mr-3">
+                            <div>
+                                <p class="text-sm font-medium">Jane Smith</p>
+                                <p class="text-xs text-gray-500">Designer</p>
+                            </div>
+                        </li>
+                        <li class="flex items-center">
+                            <img src="https://i.pravatar.cc/64?img=3" alt="" class="w-8 h-8 rounded-full mr-3">
+                            <div>
+                                <p class="text-sm font-medium">Mike Johnson</p>
+                                <p class="text-xs text-gray-500">Developer</p>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            </aside>
+
+            <!-- Main -->
+            <main class="w-full md:w-3/4">
+                <div class="bg-white rounded-lg shadow mb-6">
+                    <div class="border-b border-gray-200">
+                        <div class="flex items-center justify-between px-4 py-3">
+                            <div class="flex items-center">
+                                <a href="../dashboard.html" class="mr-3 text-indigo-600 hover:text-indigo-800">
+                                    <i data-feather="arrow-left" class="w-5 h-5"></i>
+                                </a>
+                                <h1 class="text-xl font-bold text-gray-900">Website Redesign <span
+                                        class="gradient-text">Project</span></h1>
+                            </div>
+                            <button id="settings-open"
+                                class="flex items-center px-3 py-1 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">
+                                <i data-feather="settings" class="w-4 h-4 mr-2"></i> Project Settings
+                            </button>
+                        </div>
+
+                        <!-- Tabs -->
+                        <nav class="flex -mb-px px-4 overflow-x-auto">
+                            <button data-tab="description"
+                                class="tab-button py-4 px-6 text-sm font-medium border-b-2 border-indigo-500 text-indigo-600">Description</button>
+                            <button data-tab="steps"
+                                class="tab-button py-4 px-6 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">Steps</button>
+                            <button data-tab="activity"
+                                class="tab-button py-4 px-6 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">Activity</button>
+                            <button data-tab="board"
+                                class="tab-button py-4 px-6 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">Board</button>
+                            <button data-tab="timeline"
+                                class="tab-button py-4 px-6 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">Timeline</button>
+                            <button data-tab="files"
+                                class="tab-button py-4 px-6 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">Files</button>
+                            <button id="chat-open"
+                                class="py-4 px-6 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">Chat</button>
+                        </nav>
+                    </div>
+
+                    <!-- Description -->
+                    <section id="description-content" class="tab-content p-4">
+                        <div class="space-y-6">
+                            <div class="bg-white border border-gray-200 rounded-lg p-4">
+                                <h4 class="text-base font-semibold mb-1">Project Description</h4>
+                                <p class="text-sm text-gray-700">Complete redesign of company website with new UI/UX.
+                                </p>
+                            </div>
+                            <div class="bg-white border border-gray-200 rounded-lg p-4">
+                                <div class="flex items-center justify-between mb-2">
+                                    <h4 class="text-base font-semibold">Notes</h4>
+                                    <button
+                                        class="flex items-center px-2 py-1 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700">
+                                        <i data-feather="plus" class="w-4 h-4 mr-1"></i> Add Note
+                                    </button>
+                                </div>
+                                <div class="bg-white p-3 rounded border border-gray-200">
+                                    <textarea class="w-full h-48 focus:outline-none"
+                                        placeholder="Write description notes here... Markdown is supported."></textarea>
+                                    <div class="flex justify-end mt-2">
+                                        <button
+                                            class="px-3 py-1 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700">Save
+                                            Notes</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Steps -->
+                    <section id="steps-content" class="tab-content hidden p-4">
+                        <div class="flex justify-between items-center mb-4">
+                            <h4 class="text-lg font-medium">Project Steps</h4>
+                            <button onclick="openAddStepModal()"
+                                class="flex items-center px-3 py-1 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700">
+                                <i data-feather="plus" class="w-4 h-4 mr-1"></i> Add Step
+                            </button>
+                        </div>
+
+                        <div id="steps-tree" class="space-y-2">
+                            <!-- Step 1 -->
+                            <div class="step-item bg-white p-3 rounded-lg border border-gray-200 relative" data-id="1">
+                                <div class="flex items-start">
+                                    <button class="mr-2 text-gray-400 hover:text-gray-600" aria-label="Collapse/Expand">
+                                        <i data-feather="chevron-right" class="w-4 h-4"></i>
+                                    </button>
+                                    <div class="flex-grow">
+                                        <div class="flex items-center">
+                                            <select class="status-todo text-xs px-2 py-1 rounded mr-2 status-select">
+                                                <option value="todo" selected>To Do</option>
+                                                <option value="inprogress">In Progress</option>
+                                                <option value="review">Review</option>
+                                                <option value="done">Done</option>
+                                            </select>
+                                            <input type="text" class="font-medium flex-grow focus:outline-none"
+                                                value="Research competitors" />
+                                        </div>
+                                        <div
+                                            class="mt-2 flex items-center text-xs text-gray-500 flex-wrap gap-x-3 gap-y-1">
+                                            <div class="flex items-center">
+                                                <i data-feather="user" class="w-3 h-3 mr-1"></i>
+                                                <select class="text-xs border-none bg-transparent focus:outline-none">
+                                                    <option>Unassigned</option>
+                                                    <option selected>John Doe</option>
+                                                    <option>Jane Smith</option>
+                                                    <option>Mike Johnson</option>
+                                                </select>
+                                            </div>
+                                            <div class="flex items-center">
+                                                <i data-feather="calendar" class="w-3 h-3 mr-1"></i>
+                                                <input type="text" data-datepicker
+                                                    class="text-xs border-none bg-transparent focus:outline-none"
+                                                    value="2023-05-03" />
+                                            </div>
+                                            <!-- Comments trigger -->
+                                            <button type="button"
+                                                class="flex items-center text-gray-500 hover:text-indigo-700 focus:outline-none"
+                                                onclick="openCommentsModal()">
+                                                <i data-feather="message-circle"
+                                                    class="w-3 h-3 mr-1"></i><span>Comments</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="step-actions flex space-x-1 ml-2">
+                                        <button class="text-gray-400 hover:text-indigo-600" aria-label="Add substep">
+                                            <i data-feather="plus" class="w-4 h-4"></i>
+                                        </button>
+                                        <button class="text-gray-400 hover:text-indigo-600" aria-label="More">
+                                            <i data-feather="more-vertical" class="w-4 h-4"></i>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Substep -->
+                                <div class="ml-8 mt-2 step-item bg-gray-50 p-3 rounded-lg border border-gray-200">
+                                    <div class="flex items-start">
+                                        <div class="mr-2 opacity-0">
+                                            <i data-feather="chevron-right" class="w-4 h-4"></i>
+                                        </div>
+                                        <div class="flex-grow">
+                                            <div class="flex items-center">
+                                                <select
+                                                    class="status-inprogress text-xs px-2 py-1 rounded mr-2 status-select">
+                                                    <option value="todo">To Do</option>
+                                                    <option value="inprogress" selected>In Progress</option>
+                                                    <option value="review">Review</option>
+                                                    <option value="done">Done</option>
+                                                </select>
+                                                <input type="text" class="font-medium flex-grow focus:outline-none"
+                                                    value="Analyze top 3 competitor websites" />
+                                            </div>
+                                            <div
+                                                class="mt-2 flex items-center text-xs text-gray-500 flex-wrap gap-x-3 gap-y-1">
+                                                <div class="flex items-center">
+                                                    <i data-feather="user" class="w-3 h-3 mr-1"></i>
+                                                    <select
+                                                        class="text-xs border-none bg-transparent focus:outline-none">
+                                                        <option>Unassigned</option>
+                                                        <option>John Doe</option>
+                                                        <option selected>Jane Smith</option>
+                                                        <option>Mike Johnson</option>
+                                                    </select>
+                                                </div>
+                                                <div class="flex items-center">
+                                                    <i data-feather="calendar" class="w-3 h-3 mr-1"></i>
+                                                    <input type="text" data-datepicker
+                                                        class="text-xs border-none bg-transparent focus:outline-none"
+                                                        value="2023-05-05" />
+                                                </div>
+                                                <button type="button"
+                                                    class="flex items-center text-gray-500 hover:text-indigo-700 focus:outline-none"
+                                                    onclick="openCommentsModal()">
+                                                    <i data-feather="message-circle"
+                                                        class="w-3 h-3 mr-1"></i><span>Comments</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="step-actions flex space-x-1 ml-2">
+                                            <button class="text-gray-400 hover:text-indigo-600"
+                                                aria-label="Add substep">
+                                                <i data-feather="plus" class="w-4 h-4"></i>
+                                            </button>
+                                            <button class="text-gray-400 hover:text-indigo-600" aria-label="More">
+                                                <i data-feather="more-vertical" class="w-4 h-4"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Step 2 -->
+                            <div class="step-item bg-white p-3 rounded-lg border border-gray-200">
+                                <div class="flex items-start">
+                                    <button class="mr-2 text-gray-400 hover:text-gray-600" aria-label="Collapse/Expand">
+                                        <i data-feather="chevron-right" class="w-4 h-4"></i>
+                                    </button>
+                                    <div class="flex-grow">
+                                        <div class="flex items-center">
+                                            <select class="status-todo text-xs px-2 py-1 rounded mr-2 status-select">
+                                                <option value="todo" selected>To Do</option>
+                                                <option value="inprogress">In Progress</option>
+                                                <option value="review">Review</option>
+                                                <option value="done">Done</option>
+                                            </select>
+                                            <input type="text" class="font-medium flex-grow focus:outline-none"
+                                                value="Design wireframes" />
+                                        </div>
+                                        <div
+                                            class="mt-2 flex items-center text-xs text-gray-500 flex-wrap gap-x-3 gap-y-1">
+                                            <div class="flex items-center">
+                                                <i data-feather="user" class="w-3 h-3 mr-1"></i>
+                                                <select class="text-xs border-none bg-transparent focus:outline-none">
+                                                    <option>Unassigned</option>
+                                                    <option>John Doe</option>
+                                                    <option selected>Jane Smith</option>
+                                                    <option>Mike Johnson</option>
+                                                </select>
+                                            </div>
+                                            <div class="flex items-center">
+                                                <i data-feather="calendar" class="w-3 h-3 mr-1"></i>
+                                                <input type="text" data-datepicker
+                                                    class="text-xs border-none bg-transparent focus:outline-none"
+                                                    value="2023-05-10" />
+                                            </div>
+                                            <button type="button"
+                                                class="flex items-center text-gray-500 hover:text-indigo-700 focus:outline-none"
+                                                onclick="openCommentsModal()">
+                                                <i data-feather="message-circle"
+                                                    class="w-3 h-3 mr-1"></i><span>Comments</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="step-actions flex space-x-1 ml-2">
+                                        <button class="text-gray-400 hover:text-indigo-600" aria-label="Add substep">
+                                            <i data-feather="plus" class="w-4 h-4"></i>
+                                        </button>
+                                        <button class="text-gray-400 hover:text-indigo-600" aria-label="More">
+                                            <i data-feather="more-vertical" class="w-4 h-4"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Activity -->
+                    <section id="activity-content" class="tab-content hidden p-4">
+                        <div class="bg-white rounded-lg shadow p-6">
+                            <h3 class="text-lg font-semibold text-gray-900 mb-4">Activity</h3>
+                            <div class="space-y-4">
+                                <div class="flex items-start">
+                                    <img src="https://i.pravatar.cc/64?img=2" alt="" class="w-8 h-8 rounded-full mr-3">
+                                    <div>
+                                        <p class="text-sm font-medium">Jane Smith</p>
+                                        <p class="text-sm text-gray-600">Uploaded "Competitor Analysis.pdf"</p>
+                                        <p class="text-xs text-gray-400 mt-1">2 hours ago</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-start">
+                                    <img src="https://i.pravatar.cc/64?img=1" alt="" class="w-8 h-8 rounded-full mr-3">
+                                    <div>
+                                        <p class="text-sm font-medium">John Doe</p>
+                                        <p class="text-sm text-gray-600">Completed "Project kickoff meeting"</p>
+                                        <p class="text-xs text-gray-400 mt-1">Yesterday</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-start">
+                                    <img src="https://i.pravatar.cc/64?img=3" alt="" class="w-8 h-8 rounded-full mr-3">
+                                    <div>
+                                        <p class="text-sm font-medium">Mike Johnson</p>
+                                        <p class="text-sm text-gray-600">Started working on "Research competitors"</p>
+                                        <p class="text-xs text-gray-400 mt-1">2 days ago</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Board -->
+                    <section id="board-content" class="tab-content hidden p-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div class="bg-gray-50 rounded-lg p-3">
+                                <div class="flex justify-between items-center mb-3">
+                                    <h5 class="font-medium">Backlog</h5>
+                                    <span class="text-xs bg-gray-200 rounded-full px-2 py-1">3</span>
+                                </div>
+                                <div id="backlog-column" class="space-y-3 min-h-20">
+                                    <div class="step-card bg-white p-3 rounded-lg shadow-sm border border-gray-200">
+                                        <p class="text-sm font-medium">Research competitors</p>
+                                        <div class="mt-2 flex items-center justify-between">
+                                            <span class="text-xs text-gray-500">Due May 3</span>
+                                            <img src="https://i.pravatar.cc/64?img=1" alt=""
+                                                class="w-5 h-5 rounded-full">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="bg-gray-50 rounded-lg p-3">
+                                <div class="flex justify-between items-center mb-3">
+                                    <h5 class="font-medium">In Progress</h5>
+                                    <span class="text-xs bg-blue-100 text-blue-800 rounded-full px-2 py-1">2</span>
+                                </div>
+                                <div id="inprogress-column" class="space-y-3 min-h-20">
+                                    <div class="step-card bg-white p-3 rounded-lg shadow-sm border border-gray-200">
+                                        <p class="text-sm font-medium">Analyze top 3 competitor websites</p>
+                                        <div class="mt-2 flex items-center justify-between">
+                                            <span class="text-xs text-gray-500">Due May 5</span>
+                                            <img src="https://i.pravatar.cc/64?img=2" alt=""
+                                                class="w-5 h-5 rounded-full">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="bg-gray-50 rounded-lg p-3">
+                                <div class="flex justify-between items-center mb-3">
+                                    <h5 class="font-medium">Review</h5>
+                                    <span class="text-xs bg-yellow-100 text-yellow-800 rounded-full px-2 py-1">0</span>
+                                </div>
+                                <div id="review-column" class="space-y-3 min-h-20">
+                                    <div class="text-center py-4">
+                                        <i data-feather="eye" class="w-5 h-5 mx-auto text-gray-400"></i>
+                                        <p class="text-xs text-gray-500 mt-1">No items in review</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="bg-gray-50 rounded-lg p-3">
+                                <div class="flex justify-between items-center mb-3">
+                                    <h5 class="font-medium">Done</h5>
+                                    <span class="text-xs bg-green-100 text-green-800 rounded-full px-2 py-1">1</span>
+                                </div>
+                                <div id="done-column" class="space-y-3 min-h-20">
+                                    <div class="step-card bg-white p-3 rounded-lg shadow-sm border border-gray-200">
+                                        <p class="text-sm font-medium line-through">Project kickoff meeting</p>
+                                        <div class="mt-2 flex items-center justify-between">
+                                            <span class="text-xs text-gray-500">Completed May 1</span>
+                                            <img src="https://i.pravatar.cc/64?img=1" alt=""
+                                                class="w-5 h-5 rounded-full">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Timeline -->
+                    <section id="timeline-content" class="tab-content hidden p-4">
+                        <div class="flex justify-between items-center mb-4">
+                            <div>
+                                <button class="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium"
+                                    aria-label="Prev">
+                                    <i data-feather="chevron-left" class="w-4 h-4"></i>
+                                </button>
+                                <span class="mx-2 text-sm font-medium">May 2023</span>
+                                <button class="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium"
+                                    aria-label="Next">
+                                    <i data-feather="chevron-right" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                            <div class="flex space-x-2">
+                                <button
+                                    class="px-3 py-1 bg-indigo-600 text-white rounded-md text-sm font-medium">Week</button>
+                                <button
+                                    class="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium">Month</button>
+                            </div>
+                        </div>
+
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full">
+                                <thead>
+                                    <tr>
+                                        <th class="px-2 py-2 text-left text-xs font-medium text-gray-500">Mon</th>
+                                        <th class="px-2 py-2 text-left text-xs font-medium text-gray-500">Tue</th>
+                                        <th class="px-2 py-2 text-left text-xs font-medium text-gray-500">Wed</th>
+                                        <th class="px-2 py-2 text-left text-xs font-medium text-gray-500">Thu</th>
+                                        <th class="px-2 py-2 text-left text-xs font-medium text-gray-500">Fri</th>
+                                        <th class="px-2 py-2 text-left text-xs font-medium text-gray-500">Sat</th>
+                                        <th class="px-2 py-2 text-left text-xs font-medium text-gray-500">Sun</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td class="p-2 border border-gray-200">
+                                            <div class="text-xs text-gray-500 mb-1">1</div>
+                                            <div class="status-done text-xs px-1 py-0.5 rounded mb-1">Project kickoff
+                                            </div>
+                                        </td>
+                                        <td class="p-2 border border-gray-200">
+                                            <div class="text-xs text-gray-500 mb-1">2</div>
+                                        </td>
+                                        <td class="p-2 border border-gray-200">
+                                            <div class="text-xs text-gray-500 mb-1">3</div>
+                                            <div class="status-todo text-xs px-1 py-0.5 rounded mb-1">Research starts
+                                            </div>
+                                        </td>
+                                        <td class="p-2 border border-gray-200">
+                                            <div class="text-xs text-gray-500 mb-1">4</div>
+                                        </td>
+                                        <td class="p-2 border border-gray-200">
+                                            <div class="text-xs text-gray-500 mb-1">5</div>
+                                            <div class="status-inprogress text-xs px-1 py-0.5 rounded mb-1">Competitor
+                                                analysis</div>
+                                        </td>
+                                        <td class="p-2 border border-gray-200">
+                                            <div class="text-xs text-gray-500 mb-1">6</div>
+                                        </td>
+                                        <td class="p-2 border border-gray-200">
+                                            <div class="text-xs text-gray-500 mb-1">7</div>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="p-2 border border-gray-200">
+                                            <div class="text-xs text-gray-500 mb-1">8</div>
+                                        </td>
+                                        <td class="p-2 border border-gray-200">
+                                            <div class="text-xs text-gray-500 mb-1">9</div>
+                                        </td>
+                                        <td class="p-2 border border-gray-200">
+                                            <div class="text-xs text-gray-500 mb-1">10</div>
+                                            <div class="status-todo text-xs px-1 py-0.5 rounded mb-1">Wireframes due
+                                            </div>
+                                        </td>
+                                        <td class="p-2 border border-gray-200">
+                                            <div class="text-xs text-gray-500 mb-1">11</div>
+                                        </td>
+                                        <td class="p-2 border border-gray-200">
+                                            <div class="text-xs text-gray-500 mb-1">12</div>
+                                        </td>
+                                        <td class="p-2 border border-gray-200">
+                                            <div class="text-xs text-gray-500 mb-1">13</div>
+                                        </td>
+                                        <td class="p-2 border border-gray-200">
+                                            <div class="text-xs text-gray-500 mb-1">14</div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <!-- Files -->
+                    <section id="files-content" class="tab-content hidden p-4">
+                        <div class="flex justify-between items-center mb-4">
+                            <h4 class="text-lg font-medium">Project Files</h4>
+                            <button onclick="openBulkImportModal()"
+                                class="flex items-center px-3 py-1 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700">
+                                <i data-feather="upload" class="w-4 h-4 mr-1"></i> Bulk Import
+                            </button>
+                        </div>
+                        <div id="file-dropzone"
+                            class="file-dropzone border-2 border-dashed rounded-lg p-8 text-center mb-4 cursor-pointer">
+                            <i data-feather="upload" class="w-8 h-8 mx-auto text-gray-400 mb-2"></i>
+                            <p class="text-sm text-gray-600 mb-1">Drag & drop files here or click to browse</p>
+                            <p class="text-xs text-gray-500">Max file size: 50MB</p>
+                            <input id="file-input" type="file" class="hidden" multiple />
+                        </div>
+                        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                            <div class="border-b border-gray-200 px-4 py-3 font-medium text-sm">Recent Files</div>
+                            <div class="divide-y divide-gray-200" id="files-list">
+                                <div class="p-3 flex items-center">
+                                    <i data-feather="file" class="w-5 h-5 text-gray-400 mr-3"></i>
+                                    <div class="flex-grow">
+                                        <p class="text-sm font-medium">Competitor Analysis.pdf</p>
+                                        <p class="text-xs text-gray-500">Uploaded May 2 by Jane Smith</p>
+                                    </div>
+                                    <button class="text-gray-400 hover:text-indigo-600"><i data-feather="more-vertical"
+                                            class="w-4 h-4"></i></button>
+                                </div>
+                                <div class="p-3 flex items-center">
+                                    <i data-feather="image" class="w-5 h-5 text-blue-400 mr-3"></i>
+                                    <div class="flex-grow">
+                                        <p class="text-sm font-medium">Wireframe-v1.png</p>
+                                        <p class="text-xs text-gray-500">Uploaded May 1 by John Doe</p>
+                                    </div>
+                                    <button class="text-gray-400 hover:text-indigo-600"><i data-feather="more-vertical"
+                                            class="w-4 h-4"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Add/Edit Step Modal -->
+    <div id="step-modal" class="fixed inset-0 z-50 hidden overflow-y-auto">
+        <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center">
+            <div class="fixed inset-0 bg-black/40 backdrop-blur-sm supports-[backdrop-filter]:backdrop-blur-sm transition-opacity"
+                onclick="closeStepModal()"></div>
+            <div
+                class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:align-middle sm:max-w-lg sm:w-full">
+                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4" id="modal-title">Add New Step</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Step Name</label>
+                            <input type="text"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                placeholder="Enter step name">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                            <textarea rows="3"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                placeholder="Enter step description"></textarea>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                                <select
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                    <option value="todo">To Do</option>
+                                    <option value="inprogress">In Progress</option>
+                                    <option value="review">Review</option>
+                                    <option value="done">Done</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Assignee</label>
+                                <select
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                    <option>Unassigned</option>
+                                    <option>John Doe</option>
+                                    <option>Jane Smith</option>
+                                    <option>Mike Johnson</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                                <input type="text" data-datepicker
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                    placeholder="YYYY-MM-DD">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
+                                <input type="text" data-datepicker
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                    placeholder="YYYY-MM-DD">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                    <button type="button"
+                        class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 sm:ml-3 sm:w-auto sm:text-sm">Save</button>
+                    <button type="button" onclick="closeStepModal()"
+                        class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Files: Bulk Import Modal -->
+    <div id="bulk-import-modal" class="fixed inset-0 z-50 hidden overflow-y-auto">
+        <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center">
+            <div class="fixed inset-0 bg-black/40 backdrop-blur-sm supports-[backdrop-filter]:backdrop-blur-sm transition-opacity"
+                onclick="closeBulkImportModal()"></div>
+            <div
+                class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:align-middle sm:max-w-xl sm:w-full">
+                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">Bulk Import Files</h3>
+                    <p class="text-sm text-gray-600 mb-3">Paste file names (one per line) or drag files into Files tab.
+                    </p>
+                    <textarea id="bulk-import-text" rows="10"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                        placeholder="Wireframe-v1.png
+Competitor Analysis.pdf
+Copy.docx"></textarea>
+                </div>
+                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                    <button type="button"
+                        class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 sm:ml-3 sm:w-auto sm:text-sm"
+                        onclick="closeBulkImportModal()">Import</button>
+                    <button type="button" onclick="closeBulkImportModal()"
+                        class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Steps: Comments Modal -->
+    <div id="comments-modal" class="fixed inset-0 z-50 hidden overflow-y-auto">
+        <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center">
+            <div class="fixed inset-0 bg-black/40 backdrop-blur-sm supports-[backdrop-filter]:backdrop-blur-sm transition-opacity"
+                onclick="closeCommentsModal()"></div>
+            <div
+                class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:align-middle sm:max-w-lg sm:w-full">
+                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">Comments</h3>
+                    <div class="space-y-4">
+                        <div class="flex items-start">
+                            <img src="https://i.pravatar.cc/64?img=1" alt="" class="w-8 h-8 rounded-full mr-3">
+                            <div>
+                                <p class="text-sm font-medium">John Doe</p>
+                                <p class="text-sm text-gray-600">Let's make sure we focus on mobile-first design
+                                    approach</p>
+                                <p class="text-xs text-gray-400 mt-1">May 1</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start">
+                            <img src="https://i.pravatar.cc/64?img=2" alt="" class="w-8 h-8 rounded-full mr-3">
+                            <div>
+                                <p class="text-sm font-medium">Jane Smith</p>
+                                <p class="text-sm text-gray-600">Agreed! I'll start with mobile wireframes first</p>
+                                <p class="text-xs text-gray-400 mt-1">May 1</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-4 flex">
+                        <input type="text"
+                            class="flex-grow px-3 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                            placeholder="Add a comment...">
+                        <button class="px-3 py-2 bg-indigo-600 text-white rounded-r-md hover:bg-indigo-700"
+                            aria-label="Send">
+                            <i data-feather="send" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                    <button type="button" onclick="closeCommentsModal()"
+                        class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 sm:ml-3 sm:w-auto sm:text-sm">Close</button>
+                    <button type="button" onclick="closeCommentsModal()"
+                        class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Project Settings Modal (iframe) -->
+    <div id="settings-modal" class="fixed inset-0 z-50 hidden">
+        <div class="absolute inset-0 bg-black/40 backdrop-blur-sm supports-[backdrop-filter]:backdrop-blur-sm"
+            onclick="closeSettingsModal()"></div>
+        <div
+            class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-xl overflow-hidden w-[95vw] max-w-6xl h-[88vh] flex flex-col">
+            <div class="flex items-center justify-between px-3 py-2 border-b">
+                <div class="text-sm font-medium">Project Settings</div>
+                <button class="p-2 rounded hover:bg-gray-100" onclick="closeSettingsModal()"><i data-feather="x"
+                        class="w-4 h-4"></i></button>
+            </div>
+            <iframe id="settings-frame" class="w-full h-full" src="" loading="lazy"
+                referrerpolicy="no-referrer"></iframe>
+        </div>
+    </div>
+
+    <!-- Chat Modal (iframe) -->
+    <div id="chat-modal" class="fixed inset-0 z-50 hidden">
+        <div class="absolute inset-0 bg-black/40 backdrop-blur-sm supports-[backdrop-filter]:backdrop-blur-sm"
+            onclick="closeChatModal()"></div>
+        <div
+            class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-xl overflow-hidden w-[95vw] max-w-5xl h-[80vh] flex flex-col">
+            <div class="flex items-center justify-between px-3 py-2 border-b">
+                <div class="text-sm font-medium">Project Chat</div>
+                <button class="p-2 rounded hover:bg-gray-100" onclick="closeChatModal()"><i data-feather="x"
+                        class="w-4 h-4"></i></button>
+            </div>
+            <iframe id="chat-frame" class="w-full h-full" src="" loading="lazy" referrerpolicy="no-referrer"></iframe>
+        </div>
+    </div>
+
+    <script>
+        feather.replace();
+
+        /* scroll lock helpers */
+        function lockScroll() { document.documentElement.classList.add('overflow-hidden'); }
+        function unlockScroll() { document.documentElement.classList.remove('overflow-hidden'); }
+
+        /* Tabs */
+        (function tabs() {
+            const buttons = [...document.querySelectorAll('.tab-button')];
+            const sections = {
+                description: document.getElementById('description-content'),
+                steps: document.getElementById('steps-content'),
+                activity: document.getElementById('activity-content'),
+                board: document.getElementById('board-content'),
+                timeline: document.getElementById('timeline-content'),
+                files: document.getElementById('files-content'),
+            };
+            const activate = k => {
+                buttons.forEach(b => {
+                    const is = b.dataset.tab === k;
+                    b.classList.toggle('text-indigo-600', is);
+                    b.classList.toggle('border-indigo-500', is);
+                    b.classList.toggle('border-transparent', !is);
+                    b.classList.toggle('text-gray-500', !is);
+                });
+                Object.keys(sections).forEach(x => sections[x].classList.toggle('hidden', x !== k));
+            };
+            buttons.forEach(b => b.addEventListener('click', () => activate(b.dataset.tab)));
+            activate('description');
+        })();
+
+        /* Status pill colors */
+        (function statusPills() {
+            const map = { todo: 'status-todo', inprogress: 'status-inprogress', review: 'status-review', done: 'status-done' };
+            const apply = sel => { sel.classList.remove(...Object.values(map)); sel.classList.add(map[sel.value] || 'status-todo'); };
+            document.querySelectorAll('.status-select').forEach(sel => { apply(sel); sel.addEventListener('change', () => apply(sel)); });
+        })();
+
+        /* Flatpickr (Monday-first) */
+        (function datepickers() {
+            const opts = { dateFormat: 'Y-m-d', weekNumbers: true, locale: { firstDayOfWeek: 1 } };
+            document.querySelectorAll('[data-datepicker]').forEach(inp => flatpickr(inp, opts));
+        })();
+
+        /* Files dropzone */
+        (function filesDZ() {
+            const dz = document.getElementById('file-dropzone');
+            const input = document.getElementById('file-input');
+            if (!dz || !input) return;
+            const toggleHover = on => dz.classList.toggle('active', on);
+            dz.addEventListener('click', () => input.click());
+            dz.addEventListener('dragover', e => { e.preventDefault(); toggleHover(true); });
+            ['dragleave', 'drop'].forEach(evt => {
+                dz.addEventListener(evt, e => { e.preventDefault(); e.stopPropagation(); toggleHover(false); });
+            });
+            dz.addEventListener('drop', e => {
+                const files = e.dataTransfer.files; if (!files || !files.length) return;
+                const list = document.getElementById('files-list');
+                Array.from(files).forEach(f => {
+                    const li = document.createElement('div'); li.className = 'p-3 flex items-center border-t border-gray-200';
+                    li.innerHTML = `
+            <i data-feather="${f.type.startsWith('image/') ? 'image' : 'file'}" class="w-5 h-5 text-gray-400 mr-3"></i>
+            <div class="flex-grow">
+              <p class="text-sm font-medium">${f.name}</p>
+              <p class="text-xs text-gray-500">Uploaded just now</p>
+            </div>
+            <button class="text-gray-400 hover:text-indigo-600"><i data-feather="more-vertical" class="w-4 h-4"></i></button>`;
+                    list.appendChild(li);
+                });
+                feather.replace();
+            });
+        })();
+
+        /* Board drag & drop */
+        (function boardDnD() {
+            ['backlog', 'inprogress', 'review', 'done'].forEach(id => {
+                const el = document.getElementById(`${id}-column`);
+                if (!el) return;
+                new Sortable(el, { group: 'board', animation: 150, ghostClass: 'opacity-50' });
+            });
+        })();
+
+        /* Modals */
+        function openAddStepModal() { lockScroll(); document.getElementById('step-modal').classList.remove('hidden'); }
+        function closeStepModal() { unlockScroll(); document.getElementById('step-modal').classList.add('hidden'); }
+        function openBulkImportModal() { lockScroll(); document.getElementById('bulk-import-modal').classList.remove('hidden'); }
+        function closeBulkImportModal() { unlockScroll(); document.getElementById('bulk-import-modal').classList.add('hidden'); }
+        function openCommentsModal() { lockScroll(); document.getElementById('comments-modal').classList.remove('hidden'); feather.replace(); }
+        function closeCommentsModal() { unlockScroll(); document.getElementById('comments-modal').classList.add('hidden'); }
+
+        /* Settings modal (iframe) */
+        (function settingsModal() {
+            const btn = document.getElementById('settings-open');
+            const modal = document.getElementById('settings-modal');
+            const frame = document.getElementById('settings-frame');
+            const qs = new URLSearchParams(location.search);
+            const id = qs.get('id') || 'website-redesign';
+            btn.addEventListener('click', () => { frame.src = `./settings.html?id=${encodeURIComponent(id)}`; lockScroll(); modal.classList.remove('hidden'); });
+        })();
+        function closeSettingsModal() { unlockScroll(); document.getElementById('settings-modal').classList.add('hidden'); }
+
+        /* Chat modal (iframe) */
+        (function chatModal() {
+            const btn = document.getElementById('chat-open');
+            const modal = document.getElementById('chat-modal');
+            const frame = document.getElementById('chat-frame');
+            const qs = new URLSearchParams(location.search);
+            const id = qs.get('id') || 'website-redesign';
+            btn.addEventListener('click', () => { frame.src = `./chat.html?id=${encodeURIComponent(id)}`; lockScroll(); modal.classList.remove('hidden'); });
+        })();
+        function closeChatModal() { unlockScroll(); document.getElementById('chat-modal').classList.add('hidden'); }
+
+        /* Feather refresh when DOM mutates */
+        document.addEventListener('click', () => feather.replace());
+    </script>
+
+    <!-- Auth + shared header hydration -->
+    <script type="module" src="/js/supabase.js"></script>
+    <script type="module" src="/js/api.js"></script>
+    <script type="module" src="/js/header.js"></script>
+    <script type="module">
+        import { hydrateHeader } from '/js/header.js';
+        await hydrateHeader(); // same name/photo logic as dashboard
+    </script>
+</body>
+
+</html>

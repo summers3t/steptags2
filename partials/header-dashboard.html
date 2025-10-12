@@ -1,0 +1,51 @@
+<header class="bg-white/90 backdrop-blur border-b border-gray-100 sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="h-16 flex items-center justify-between">
+            <a href="dashboard.html" class="flex items-center gap-2">
+                <span class="inline-flex items-center justify-center rounded-xl bg-indigo-50 p-2">
+                    <i data-feather="tag" class="w-5 h-5 text-indigo-600" aria-hidden="true"></i>
+                </span>
+                <span class="text-xl font-bold">StepTags <span
+                        class="bg-gradient-to-r from-blue-500 to-purple-500 bg-clip-text text-transparent">Pro</span></span>
+            </a>
+            <div class="flex items-center gap-2">
+                <button
+                    class="relative rounded-full p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                    aria-label="Notifications">
+                    <i data-feather="bell" class="w-5 h-5" aria-hidden="true"></i>
+                    <span class="absolute -top-0.5 -right-0.5 inline-flex h-2 w-2 rounded-full bg-red-500"></span>
+                </button>
+                <div class="relative" id="user-menu-root">
+                    <button id="user-menu-btn"
+                        class="inline-flex items-center gap-2 rounded-full pl-1 pr-2 py-1 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                        aria-haspopup="menu" aria-expanded="false">
+                        <img src="https://i.pravatar.cc/64?img=42" alt="John Doe" class="w-8 h-8 rounded-full"
+                            loading="lazy" decoding="async" />
+                        <span class="hidden sm:inline text-sm font-medium text-gray-700">John Doe</span>
+                        <i data-feather="chevron-down" class="w-4 h-4 text-gray-500" aria-hidden="true"></i>
+                    </button>
+                    <div id="user-menu"
+                        class="hidden absolute right-0 mt-2 w-48 rounded-md border border-gray-200 bg-white shadow-md"
+                        role="menu" aria-labelledby="user-menu-btn">
+                        <a href="#" class="block px-4 py-2 text-sm hover:bg-gray-50" role="menuitem">Profile</a>
+                        <a href="#" class="block px-4 py-2 text-sm hover:bg-gray-50" role="menuitem">Settings</a>
+                        <a href="index.html" class="block px-4 py-2 text-sm hover:bg-gray-50" role="menuitem">Sign
+                            out</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+<script>
+    (function () {
+        const menuBtn = document.getElementById('user-menu-btn');
+        const menu = document.getElementById('user-menu');
+        const root = document.getElementById('user-menu-root');
+        function close() { menu.classList.add('hidden'); menuBtn?.setAttribute('aria-expanded', 'false'); }
+        function toggle() { menu.classList.toggle('hidden'); menuBtn?.setAttribute('aria-expanded', menu.classList.contains('hidden') ? 'false' : 'true'); }
+        menuBtn?.addEventListener('click', (e) => { e.stopPropagation(); toggle(); });
+        document.addEventListener('click', (e) => { if (root && !root.contains(e.target)) close(); });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+    })();
+</script>

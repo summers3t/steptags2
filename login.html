@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sign in · StepTags Pro</title>
+    <meta name="description" content="Sign in to StepTags Pro to manage your projects." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        html,
+        body {
+            height: 100%
+        }
+
+        body {
+            font-family: Inter, system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif
+        }
+
+        @media (prefers-reduced-motion:no-preference) {
+            .card-hover {
+                transition: transform .2s ease, box-shadow .2s ease
+            }
+
+            .card-hover:hover {
+                transform: translateY(-3px)
+            }
+        }
+
+        .gradient-text {
+            background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent
+        }
+    </style>
+    <script defer src="https://cdn.jsdelivr.net/npm/feather-icons@4.29.2/dist/feather.min.js"></script>
+</head>
+
+<body class="bg-gray-50 text-gray-900 antialiased">
+    <a href="index.html"
+        class="fixed top-4 left-4 inline-flex items-center gap-2 rounded-full bg-white/90 backdrop-blur px-3 py-2 text-gray-700 hover:text-indigo-700 shadow-sm border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+        aria-label="Back to home">
+        <i data-feather="arrow-left" class="w-5 h-5" aria-hidden="true"></i>
+        <span class="hidden sm:inline text-sm font-medium">Back</span>
+    </a>
+
+    <main class="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+        <section class="w-full max-w-md bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
+            <header class="text-center mb-8">
+                <i data-feather="tag" class="w-12 h-12 text-indigo-600 mx-auto" aria-hidden="true"></i>
+                <h1 class="mt-4 text-3xl font-bold">Sign in to <span class="gradient-text">StepTags Pro</span></h1>
+                <p class="mt-2 text-sm text-gray-600">
+                    Or <a href="signup.html" class="font-medium text-indigo-600 hover:text-indigo-500">create an
+                        account</a>
+                </p>
+            </header>
+
+            <div id="auth-status"
+                class="hidden mb-4 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-sm px-3 py-2"
+                role="status"></div>
+
+            <form class="space-y-5" action="#" method="post" novalidate data-login-form>
+                <div class="space-y-4">
+                    <div>
+                        <label for="email" class="block text-sm font-medium mb-1">Email</label>
+                        <input id="email" name="email" type="email" autocomplete="email" required
+                            class="w-full rounded-lg border border-gray-300 px-3 py-3 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 sm:text-sm"
+                            placeholder="you@example.com" />
+                    </div>
+                    <div>
+                        <label for="password" class="block text-sm font-medium mb-1">Password</label>
+                        <div class="relative">
+                            <input id="password" name="password" type="password" autocomplete="current-password"
+                                required
+                                class="w-full rounded-lg border border-gray-300 px-3 py-3 pr-10 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 sm:text-sm"
+                                placeholder="••••••••" />
+                            <button type="button"
+                                class="absolute inset-y-0 right-0 pr-3 inline-flex items-center text-gray-400 hover:text-gray-600 focus:outline-none"
+                                id="toggle-pass" aria-label="Show password">
+                                <i data-feather="eye" class="w-5 h-5" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between">
+                    <label class="inline-flex items-center gap-2 text-sm">
+                        <input id="remember-me" name="remember-me" type="checkbox"
+                            class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" />
+                        Remember me
+                    </label>
+                    <a href="#" class="text-sm text-indigo-600 hover:text-indigo-500">Forgot your password?</a>
+                </div>
+
+                <button type="submit"
+                    class="w-full inline-flex justify-center items-center rounded-lg px-4 py-3 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/50">Sign
+                    in</button>
+            </form>
+
+            <div class="mt-8">
+                <div class="relative">
+                    <div class="absolute inset-0 flex items-center">
+                        <div class="w-full border-t border-gray-200"></div>
+                    </div>
+                    <div class="relative flex justify-center"><span class="px-3 bg-white text-sm text-gray-500">Or
+                            continue with</span></div>
+                </div>
+
+                <button type="button" data-google
+                    class="mt-6 w-full inline-flex justify-center items-center gap-2 py-2.5 px-4 border border-gray-300 rounded-lg bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                    aria-label="Continue with Google">
+                    <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+                        <path fill="#FFC107"
+                            d="M43.6 20.5H42V20H24v8h11.3A12.9 12.9 0 0 1 24 36.9 12.9 12.9 0 0 1 11.1 24 12.9 12.9 0 0 1 24 11.1c3.3 0 6.3 1.2 8.6 3.3l5.7-5.7A21.5 21.5 0 1 0 24 45.5c10.9 0 20-8.9 20-20 0-1.6-.2-3.3-.4-5z" />
+                        <path fill="#FF3D00"
+                            d="M6.3 14.7l6.6 4.8A12.9 12.9 0 0 1 24 11.1c3.3 0 6.3 1.2 8.6 3.3l5.7-5.7A21.5 21.5 0 0 0 24 2.5 21.5 21.5 0 0 0 6.3 14.7z" />
+                        <path fill="#4CAF50"
+                            d="M24 45.5c5.8 0 11.1-2.2 15.1-5.8l-6.9-5.6A12.9 12.9 0 0 1 24 36.9c-5.5 0-10.2-3.5-11.9-8.4l-6.6 5.1A21.5 21.5 0 0 0 24 45.5z" />
+                        <path fill="#1976D2"
+                            d="M43.6 20.5H42V20H24v8h11.3c-1 3-3.2 5.5-6.1 6.9l6.9 5.6c-.5 .4 7-5.2 7-17 0-1.6-.2-3.3-.5-5z" />
+                    </svg>
+                    Continue with Google
+                </button>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => { window.feather && window.feather.replace(); });
+        (function () {
+            const pass = document.getElementById('password');
+            const toggle = document.getElementById('toggle-pass');
+            toggle?.addEventListener('click', () => {
+                const visible = pass.getAttribute('type') === 'text';
+                pass.setAttribute('type', visible ? 'password' : 'text');
+                toggle.setAttribute('aria-label', visible ? 'Show password' : 'Hide password');
+                toggle.innerHTML = '';
+                const i = document.createElement('i');
+                i.setAttribute('data-feather', visible ? 'eye' : 'eye-off');
+                i.className = 'w-5 h-5';
+                toggle.appendChild(i);
+                window.feather && window.feather.replace();
+            });
+        })();
+    </script>
+
+    <script type="module" src="/js/supabase.js"></script>
+    <script type="module">
+        import { redirectIfAuthed } from '/js/supabase.js';
+        import { signInWithGoogle, emailSignIn } from '/js/auth.js';
+
+        await redirectIfAuthed();
+
+        document.querySelector('[data-google]')?.addEventListener('click', signInWithGoogle);
+
+        const form = document.querySelector('[data-login-form]');
+        form?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fd = new FormData(form);
+            try {
+                await emailSignIn(fd.get('email'), fd.get('password'));
+                location.replace('/dashboard.html');
+            } catch (err) {
+                const box = document.getElementById('auth-status');
+                box.textContent = err?.message || 'Sign-in failed.';
+                box.classList.remove('hidden');
+                box.focus();
+            }
+        });
+    </script>
+</body>
+
+</html>

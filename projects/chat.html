@@ -1,0 +1,414 @@
+<!-- C:\steptags2\projects\chat.html -->
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Project Chat · StepTags Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/feather-icons"></script>
+    <style>
+        html,
+        body,
+        * {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Lucida Console", "Courier New", monospace;
+        }
+
+        body {
+            background: #f8fafc;
+            color: #111827;
+        }
+
+        .convo-bar {
+            background: linear-gradient(#f3f4f6, #e5e7eb);
+            border-bottom: 1px solid #c7cbd1
+        }
+
+        .row:hover {
+            background: #f3f4f6
+        }
+
+        .scroll-shadow {
+            box-shadow: inset 0 6px 6px -6px rgba(0, 0, 0, .12)
+        }
+
+        .input-3d {
+            border: 1px solid #808080;
+            border-top-color: #ffffff;
+            border-left-color: #ffffff
+        }
+
+        .chip {
+            border: 1px solid #cbd5e1;
+            border-bottom-color: #cbd5e1;
+            background: #f1f5f9;
+            cursor: pointer
+        }
+
+        .chip:hover {
+            background: #ffffff
+        }
+
+        .chip-active {
+            background: #ffffff;
+            border-bottom-color: #ffffff
+        }
+
+        .chip-pressed {
+            background: #e5e7eb;
+            border-top-color: #808080;
+            border-left-color: #808080;
+            border-bottom-color: #ffffff;
+            border-right-color: #ffffff;
+            transform: translateY(1px)
+        }
+
+        .chip-unread {
+            color: #ef4444
+        }
+
+        .chip-label {
+            font-family: Tahoma, Geneva, Verdana, sans-serif
+        }
+
+        .member {
+            padding: 0.125rem 0.375rem;
+            border-radius: 0.375rem;
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            width: 100%;
+            text-align: left;
+            line-height: 1.25rem;
+            font-size: 13px
+        }
+
+        .member:hover {
+            background: #eef2ff
+        }
+
+        .member.selected {
+            background: #e0e7ff
+        }
+    </style>
+</head>
+
+<body class="antialiased">
+    <main class="h-screen max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+        <div class="h-full rounded-lg border border-gray-300 shadow-sm overflow-hidden bg-white flex flex-col">
+            <!-- Grey bar -->
+            <div id="conv-strip" class="convo-bar px-3 py-2 h-10 flex items-center gap-0.5 text-xs">
+                <button class="chip flex items-center gap-1 px-3 h-8 rounded-t text-xs" aria-pressed="true">
+                    <span class="chip-label text-gray-700">Project</span>
+                </button>
+            </div>
+
+            <!-- Body: MCP | RIGHT members -->
+            <div class="flex-1 grid grid-cols-12">
+                <!-- MCP -->
+                <section class="col-span-12 md:col-span-9 flex flex-col">
+                    <!-- IMPORTANT: no flex layout here; newest appended at bottom -->
+                    <div id="log" class="flex-1 overflow-y-auto scroll-shadow text-[13px] leading-5 px-2 py-2">
+                        <div id="log-inner" class="min-h-full flex flex-col justify-end"></div>
+                    </div>
+                    <!-- Input at bottom -->
+                    <form id="chat-form" class="border-t border-gray-200 flex items-center gap-2 px-2 py-2">
+                        <input id="chat-input" type="text" autocomplete="off"
+                            placeholder="Type a message. Press Enter to send."
+                            class="flex-1 px-3 py-2 input-3d focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500" />
+                        <button class="px-3 py-2 rounded-md bg-indigo-600 text-white text-sm hover:bg-indigo-700"
+                            type="submit" aria-label="Send">
+                            <i data-feather="send" class="w-4 h-4"></i>
+                        </button>
+                    </form>
+                </section>
+
+                <!-- RIGHT members -->
+                <aside class="hidden md:block col-span-12 md:col-span-3 border-l border-gray-200 bg-gray-50">
+                    <ul id="nicklist" class="text-[13px] leading-5 px-1 pb-1 space-y-0 select-none">
+                        <li><button class="member open-dm" data-user="@Admin"><span
+                                    class="w-2 h-2 rounded-full bg-green-500"></span><span>@Admin</span></button></li>
+                        <li><button class="member open-dm" data-user="john"><span
+                                    class="w-2 h-2 rounded-full bg-green-500"></span><span>john</span></button></li>
+                        <li><button class="member open-dm" data-user="jane"><span
+                                    class="w-2 h-2 rounded-full bg-yellow-400"></span><span>jane</span></button></li>
+                        <li><button class="member open-dm" data-user="mike"><span
+                                    class="w-2 h-2 rounded-full bg-gray-400"></span><span>mike</span></button></li>
+                    </ul>
+                </aside>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            feather.replace();
+
+            const isAdmin = true;
+            const me = { name: 'John Doe', nick: 'john', initials: 'JD' };
+
+            const qs = new URLSearchParams(location.search);
+            const projId = qs.get('id') || 'website-redesign';
+            const projectName = projId.replace(/[-_]+/g, ' ').replace(/\b\w/g, s => s.toUpperCase());
+            const storageKeyDMs = `st_chat_dms_${projId}`;
+            const storageKeyActive = `st_chat_active_${projId}`;
+
+            const conversations = new Map();
+            function ensureConv(key, data) {
+                if (!conversations.has(key)) conversations.set(key, { ...data, messages: [], unread: 0 });
+                return conversations.get(key);
+            }
+
+            const commonKey = 'common';
+            ensureConv(commonKey, {
+                kind: 'common',
+                title: projectName,
+                label: projectName.length <= 20 ? projectName : projectName.slice(0, 19) + '…'
+            });
+
+            try {
+                (JSON.parse(localStorage.getItem(storageKeyDMs) || '[]') || [])
+                    .forEach(u => ensureConv(`dm:${u}`, { kind: 'dm', user: u, label: `DM: ${u}` }));
+            } catch { }
+
+            let activeKey = localStorage.getItem(storageKeyActive) || commonKey;
+            if (!conversations.has(activeKey)) activeKey = commonKey;
+
+            const strip = document.getElementById('conv-strip');
+            const logEl = document.getElementById('log');
+            const logInner = document.getElementById('log-inner');
+            const form = document.getElementById('chat-form');
+            const input = document.getElementById('chat-input');
+
+            function saveDMs() {
+                try {
+                    localStorage.setItem(
+                        storageKeyDMs,
+                        JSON.stringify([...conversations.keys()].filter(k => k.startsWith('dm:')).map(k => k.slice(3)))
+                    );
+                } catch { }
+            }
+            function saveActive() {
+                try { localStorage.setItem(storageKeyActive, activeKey); } catch { }
+            }
+
+            function linkify(text) {
+                const urlRe = /((https?:\/\/|www\.)[^\s<]+)/gi;
+                return text.replace(urlRe, m => {
+                    const href = m.startsWith('http') ? m : 'http://' + m;
+                    return `<a href="${href}" target="_blank" class="underline text-indigo-600 hover:text-indigo-800">${m}</a>`;
+                });
+            }
+
+            function msgRow({ time = new Date(), nick, text, kind = 'msg', self = false }) {
+                const t = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', hour12: false }).format(time);
+                const row = document.createElement('div');
+                row.className = 'row group flex items-start gap-1.5 px-2 py-0.5';
+                const color = kind === 'notice' ? 'text-cyan-700'
+                    : kind === 'action' ? 'text-purple-700'
+                        : kind === 'error' ? 'text-red-700' : 'text-gray-800';
+                const nickColor = nick?.startsWith('@') ? 'text-blue-600'
+                    : nick?.startsWith('+') ? 'text-teal-700' : (self ? 'text-indigo-700' : 'text-emerald-700');
+
+                let inner = '';
+                if (kind === 'notice') {
+                    inner = `
+            <span class="text-xs text-gray-400 tabular-nums w-12 text-right shrink-0 whitespace-nowrap">${t}</span>
+            <div class="flex-1 ${color}">*** ${text}</div>`;
+                } else if (kind === 'action') {
+                    inner = `
+            <span class="text-xs text-gray-400 tabular-nums w-12 text-right shrink-0 whitespace-nowrap">${t}</span>
+            <div class="flex-1 ${color}">* ${nick} ${linkify(text)}</div>`;
+                } else {
+                    inner = `
+            <span class="text-xs text-gray-400 tabular-nums w-12 text-right shrink-0 whitespace-nowrap">${t}</span>
+            <div class="flex-1">
+              <span class="font-semibold ${nickColor}">${nick}</span><span class="text-gray-800">: </span>
+              <span class="${color}">${linkify(text)}</span>
+            </div>
+            ${isAdmin ? `<button title="Delete" aria-label="Delete"
+                class="p-1 rounded text-gray-400 hover:text-red-600 hover:bg-red-50 hidden group-hover:inline-flex">
+                <i data-feather="trash-2" class="w-4 h-4"></i>
+            </button>` : ''}`;
+                }
+                row.innerHTML = inner;
+                const del = row.querySelector('button');
+                if (del) del.addEventListener('click', () => row.remove());
+                return row;
+            }
+
+            // Render oldest at top, newest at bottom. Anchor scroll to bottom.
+            function renderLog() {
+                const conv = conversations.get(activeKey);
+                logInner.innerHTML = '';
+                conv.messages.forEach(m => logInner.appendChild(msgRow(m))); // oldest at top, newest at bottom
+                feather.replace();
+                logEl.scrollTop = logEl.scrollHeight; // anchor to bottom
+            }
+
+
+            // Append new message at bottom of current view
+            function addMessage(key, msg) {
+                const conv = conversations.get(key);
+                conv.messages.push(msg);
+                if (key === activeKey) {
+                    const row = msgRow(msg);
+                    logInner.appendChild(row);          // bottom
+                    feather.replace();
+                    logEl.scrollTop = logEl.scrollHeight;
+                } else {
+                    conv.unread++;
+                    renderChips();
+                }
+            }
+
+
+            const CHIP_BASE = 'chip flex items-center gap-1 px-3 h-8 rounded-t text-xs';
+
+            function makeChip(key, conv) {
+                const active = key === activeKey;
+                const unread = conv.unread > 0;
+                const btn = document.createElement('button');
+                btn.className = `${CHIP_BASE} ${active ? 'chip-active chip-pressed' : ''}`;
+                btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+
+                const label = conv.kind === 'dm' ? conv.user : conv.label;
+                btn.innerHTML = `
+          <span class="chip-label ${unread && !active ? 'chip-unread' : 'text-gray-700'}">${label}</span>
+          ${conv.kind === 'dm' ? '<i data-feather="x" class="w-3.5 h-3.5 ml-1 text-gray-400 hover:text-gray-700 shrink-0"></i>' : ''}
+        `;
+
+                btn.addEventListener('click', (e) => {
+                    if (conv.kind === 'dm' && e.target.closest('svg')) {
+                        conversations.delete(key);
+                        if (activeKey === key) activeKey = commonKey;
+                        saveDMs(); saveActive();
+                        renderChips(); renderLog();
+                        input.focus();
+                        return;
+                    }
+                    activeKey = key;
+                    conv.unread = 0;
+                    saveActive();
+                    renderChips(); renderLog();
+                    input.focus();
+                });
+                return btn;
+            }
+
+            function renderChips() {
+                strip.innerHTML = '';
+                if (conversations.has(commonKey)) strip.appendChild(makeChip(commonKey, conversations.get(commonKey)));
+                [...conversations.entries()]
+                    .filter(([k]) => k.startsWith('dm:'))
+                    .sort((a, b) => a[1].user.localeCompare(b[1].user))
+                    .forEach(([k, conv]) => strip.appendChild(makeChip(k, conv)));
+                feather.replace();
+            }
+
+            // Members interactions (right side)
+            const nicklist = document.getElementById('nicklist');
+            nicklist.addEventListener('click', (e) => {
+                const btn = e.target.closest('.member');
+                if (!btn) return;
+                nicklist.querySelectorAll('.member').forEach(m => m.classList.remove('selected'));
+                btn.classList.add('selected');
+                input.focus();
+            });
+            nicklist.addEventListener('dblclick', (e) => {
+                const btn = e.target.closest('.member');
+                if (!btn) return;
+                const user = btn.dataset.user;
+                const key = `dm:${user}`;
+                ensureConv(key, { kind: 'dm', user, label: `DM: ${user}` });
+                activeKey = key;
+                saveDMs(); saveActive();
+                renderChips(); renderLog();
+                input.focus();
+            });
+
+            // Seed common chat
+            [
+                { nick: '@Admin', text: `Welcome to ${projectName}`, time: new Date(Date.now() - 600000) },
+                { kind: 'notice', text: 'jane has joined', time: new Date(Date.now() - 590000) },
+                { nick: 'jane', text: 'check this https://steptags.app', time: new Date(Date.now() - 580000) },
+                { kind: 'action', nick: 'mike', text: 'is deploying build', time: new Date(Date.now() - 560000) },
+                { nick: 'john', text: 'shipping today?', time: new Date(Date.now() - 540000) }
+            ].forEach(m => ensureConv(commonKey, {}).messages.push(m));
+
+            // Demo unread in DM
+            setTimeout(() => {
+                const key = 'dm:jane';
+                ensureConv(key, { kind: 'dm', user: 'jane', label: 'DM: jane' });
+                addMessage(key, { nick: 'jane', text: 'Ping — are you around?', time: new Date() });
+                saveDMs(); renderChips();
+            }, 1200);
+
+            // Submit
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') { e.preventDefault(); form.requestSubmit(); }
+            });
+
+            form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const text = input.value.trim();
+                if (!text) return;
+                addMessage(activeKey, { nick: me.nick, text, self: true, time: new Date() });
+                input.value = '';
+                input.focus();
+
+                const conv = conversations.get(activeKey);
+                if (conv.kind === 'dm') {
+                    const replyFrom = conv.user;
+                    setTimeout(() => {
+                        addMessage(`dm:${replyFrom}`, { nick: replyFrom, text: 'Replying now.', time: new Date() });
+                    }, 1200);
+                }
+            });
+
+            // Focus when clicking anywhere relevant
+            strip.addEventListener('click', (e) => { if (!e.target.closest('svg')) input.focus(); });
+            logEl.addEventListener('mousedown', () => input.focus());
+            document.getElementById('log-inner').addEventListener('mousedown', () => input.focus());
+            document.addEventListener('mousedown', (e) => {
+                // Clicks inside main chat container focus input
+                if (e.target.closest('#log') || e.target.closest('#conv-strip')) input.focus();
+            });
+
+            // Global type-to-focus: start typing anywhere -> input focuses and captures the keystroke
+            document.addEventListener('keydown', (e) => {
+                const ae = document.activeElement;
+                const isTypingEl = ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable);
+                if (isTypingEl) return;
+                if (e.key.length === 1) {
+                    e.preventDefault();
+                    input.focus();
+                    const v = input.value;
+                    const pos = input.selectionStart ?? v.length;
+                    input.value = v.slice(0, pos) + e.key + v.slice(pos);
+                    input.setSelectionRange(pos + 1, pos + 1);
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    input.focus();
+                } else if (e.key === 'Backspace') {
+                    e.preventDefault();
+                    input.focus();
+                    const v = input.value;
+                    const pos = input.selectionStart ?? v.length;
+                    if (pos > 0) {
+                        input.value = v.slice(0, pos - 1) + v.slice(pos);
+                        input.setSelectionRange(pos - 1, pos - 1);
+                    }
+                }
+            });
+
+            // First paint
+            renderChips();
+            renderLog();
+            input.focus();
+        });
+    </script>
+</body>
+
+</html>
