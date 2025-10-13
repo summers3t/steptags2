@@ -412,24 +412,17 @@
 
     <!-- App boot order: supabase -> api -> header -> page scripts -->
     <script type="module" src="/js/supabase.js"></script>
+    <script type="module" src="/js/header.js"></script> <!-- single include -->
     <script type="module" src="/js/api.js"></script>
-    <script type="module" src="/js/header.js"></script>
     <script type="module">
-        import { hydrateHeader } from '/js/header.js'
-        import { supabase } from '/js/supabase.js'
-
-        await hydrateHeader()
-        window.feather && window.feather.replace()
-
-        // Optional realtime dot (mirrors dashboard)
+        import { supabase } from '/js/supabase.js';
+        window.feather && window.feather.replace();
         supabase.channel('rt-steps')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'steps' }, () => {
-                document.getElementById('notif-dot')?.classList.remove('hidden')
+                document.getElementById('notif-dot')?.classList.remove('hidden');
             })
-            .subscribe()
+            .subscribe();
     </script>
-
-    <!-- Page-specific module (form -> backend wiring) -->
     <script type="module" src="/js/newproject.js"></script>
 </body>
 

@@ -210,12 +210,16 @@
     </script>
 
     <script type="module" src="/js/supabase.js"></script>
+    <script type="module" src="/js/header.js"></script>
     <script type="module" src="/js/api.js"></script>
+    <script type="module" src="js/dashboard.js"></script>
+
     <script type="module">
         import { supabase, requireAuth } from '/js/supabase.js';
         import { hardSignOut } from '/js/devtools.js';
         import { getProfile, resolveAvatarUrl, resolveDisplayName } from '/js/api.js';
 
+        // Auth + header fill (keep as-is)
         const session = await requireAuth();
         const user = session.user;
 
@@ -230,38 +234,84 @@
             document.getElementById('avatar').src = `https://i.pravatar.cc/64?u=${encodeURIComponent(user?.id || 'anon')}`;
         }
 
-        document.getElementById('logout-link')?.addEventListener('click', (e) => { e.preventDefault(); hardSignOut(); });
+        document.getElementById('logout-link')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            hardSignOut();
+        });
 
+        // Projects list
         const listEl = document.getElementById('projects-list');
         const cardTpl = document.getElementById('project-card-tpl');
+
         const { data: projects, error } = await supabase
             .from('projects')
             .select('id,title,description,due_date,updated_at')
             .order('updated_at', { ascending: false });
 
         if (error) console.error(error);
+
         if (!projects || projects.length === 0) {
             listEl.innerHTML = '<div class="opacity-70 p-6 bg-white rounded-2xl border border-gray-100">No projects yet.</div>';
         } else {
             listEl.innerHTML = '';
             projects.forEach(p => {
-                const node = cardTpl.content.cloneNode(true);
-                node.querySelector('[data-prop="title"]').textContent = p.title ?? '(Untitled)';
-                node.querySelector('[data-prop="description"]').textContent = p.description ?? '';
-                node.querySelector('[data-prop="due"]').textContent = p.due_date ? ('Due: ' + new Date(p.due_date).toLocaleDateString()) : 'No due date';
-                const manage = node.querySelector('[data-prop="manageTeam"]');
-                manage.href = `/projects/project.html?id=${p.id}`;
-                manage.addEventListener('click', (e) => { e.preventDefault(); window.__openTeamModal(p.title ?? 'Project'); });
-                const avatars = node.querySelector('[data-prop="avatars"]');
-                avatars.innerHTML = `
+                const frag = cardTpl.content.cloneNode(true);
+
+                // Fill fields
+                frag.querySelector('[data-prop="title"]').textContent = p.title ?? '(Untitled)';
+                frag.querySelector('[data-prop="description"]').textContent = p.description ?? '';
+                const dueEl = frag.querySelector('[data-prop="due"]');
+                if (dueEl) {
+                    dueEl.textContent = p.due_date ? ('Due ' + new Date(p.due_date).toLocaleDateString()) : 'No due date';
+                }
+
+                // Keep Manage Team as modal trigger (unchanged)
+                const manage = frag.querySelector('[data-prop="manageTeam"]');
+                if (manage) {
+                    manage.href = `/projects/project.html?id=${p.id}`;
+                    manage.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        window.__openTeamModal?.(p.title ?? 'Project');
+                    });
+                }
+
+                // Demo avatars (unchanged)
+                const avatars = frag.querySelector('[data-prop="avatars"]');
+                if (avatars) {
+                    avatars.innerHTML = `
           <img src="https://i.pravatar.cc/32?img=1" class="w-6 h-6 rounded-full border-2 border-white" alt="">
           <img src="https://i.pravatar.cc/32?img=2" class="w-6 h-6 rounded-full border-2 border-white" alt="">
         `;
-                listEl.appendChild(node);
+                }
+
+                // Card navigation: click or Enter anywhere on the card opens the project
+                // without changing visuals.
+                const card = frag.firstElementChild || frag.querySelector('article') || frag.querySelector('[data-card]');
+                const url = `/projects/project.html?id=${encodeURIComponent(p.id)}`;
+
+                if (card) {
+                    card.dataset.projectId = p.id;
+                    if (!card.hasAttribute('tabindex')) card.setAttribute('tabindex', '0');
+                    if (!card.hasAttribute('role')) card.setAttribute('role', 'link');
+
+                    card.addEventListener('click', (e) => {
+                        // Ignore clicks on interactive elements inside the card
+                        if (e.target.closest('a,button,[role="button"],input,select,textarea,[data-no-nav],[data-prop="manageTeam"]')) return;
+                        window.location.href = url;
+                    });
+
+                    card.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter') window.location.href = url;
+                    });
+                }
+
+                listEl.appendChild(frag);
             });
+
             window.feather && window.feather.replace();
         }
 
+        // Activity feed (unchanged)
         const actEl = document.getElementById('activity-list');
         const actTpl = document.getElementById('activity-item-tpl');
         const { data: activities } = await supabase
@@ -287,6 +337,7 @@
             })
             .subscribe();
     </script>
+
 </body>
 
 </html>

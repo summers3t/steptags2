@@ -1,192 +1,77 @@
-// Central helpers for profiles/avatars
-import { supabase } from '/js/supabase.js';
+import { supabase } from './supabase.js';
 
-const AVATAR_BUCKET = 'avatars';
-
+/* ---------- Profile ---------- */
 export async function getProfile(userId) {
-    // Select * to be resilient to column-name differences (display_name/name/email/…)
     const { data, error } = await supabase
         .from('profiles')
-        .select('*')
+        .select('id,email,display_name,avatar_path')
         .eq('id', userId)
         .maybeSingle();
     if (error) throw error;
     return data || null;
 }
 
-function isUrl(s) { return typeof s === 'string' && /^https?:\/\//i.test(s); }
-function firstTruthy(...vals) { return vals.find(v => typeof v === 'string' ? v.trim() : v) || ''; }
-
+/* ---------- Resolvers for header ---------- */
 export function resolveDisplayName(user, profile) {
-    const m = user?.user_metadata || {};
-    // Try many candidates; trim + join when needed
-    const name = firstTruthy(
-        profile?.display_name,
-        profile?.name,
-        profile?.full_name,
-        profile?.username,
-        `${firstTruthy(profile?.first_name)} ${firstTruthy(profile?.last_name)}`.trim(),
-        m.full_name,
-        m.name,
-        m.user_name,
-        m.preferred_username,
-        `${firstTruthy(m.given_name)} ${firstTruthy(m.family_name)}`.trim(),
-        user?.email
-    );
-    return name || 'User';
-}
-
-export async function resolveAvatarUrl(user, profile) {
     const meta = user?.user_metadata || {};
-
-    // 1) Storage path in a variety of possible profile fields
-    const storagePath = firstTruthy(
-        profile?.avatar_path,
-        profile?.avatar,        // sometimes stored as "avatar"
-        profile?.photo_path
+    const id0 = Array.isArray(user?.identities) ? user.identities[0]?.identity_data || {} : {};
+    return (
+        profile?.display_name ||
+        meta.full_name || meta.name ||
+        id0.full_name || id0.name ||
+        (user?.email ? user.email.split('@')[0] : 'User')
     );
-    if (storagePath) {
-        try {
-            const { data, error } = await supabase.storage.from(AVATAR_BUCKET).createSignedUrl(storagePath, 3600);
-            if (!error && data?.signedUrl) return data.signedUrl;
-        } catch { }
-    }
-
-    // 2) Direct URL on profile (various field names)
-    const directProfileUrl = firstTruthy(
-        profile?.avatar_url,
-        profile?.photo_url,
-        profile?.image_url,
-        profile?.picture
-    );
-    if (isUrl(directProfileUrl)) return directProfileUrl;
-
-    // 3) OAuth / user metadata (Google etc.)
-    const oauthUrl = firstTruthy(
-        meta.avatar_url,
-        meta.picture,
-        meta.photo_url,
-        meta.image_url
-    );
-    if (isUrl(oauthUrl)) return oauthUrl;
-
-    // 4) Fallback (seeded)
-    return `https://i.pravatar.cc/64?u=${encodeURIComponent(user?.id || 'anon')}`;
 }
 
+export function resolveAvatarUrl(user, profile) {
+    // Prefer OAuth avatar if present. Fallback to identities.picture.
+    const meta = user?.user_metadata || {};
+    const id0 = Array.isArray(user?.identities) ? user.identities[0]?.identity_data || {} : {};
+    return meta.avatar_url || meta.picture || id0.avatar_url || id0.picture || '';
+}
 
+/* ---------- Projects (RLS filters visibility) ---------- */
+/* Remove ORDER to avoid timeouts first. Keep columns minimal. Limit rows. */
+export function listProjectsQuery() {
+    return supabase
+        .from('projects')
+        .select('id,title,description,created_at,created_by')
+        .is('deleted_at', null)
+        .limit(100);
+}
 
-/* ---------- Projects ---------- */
-export const listProjects = () =>
-    supabase.from('projects')
-        .select('*')
-        .neq('is_deleted', true)
-        .order('created_at', { ascending: false });
+/* Create + owner membership */
+export async function createProject({ title, description = null }) {
+    const { data: auth } = await supabase.auth.getUser();
+    const uid = auth?.user?.id;
+    if (!uid) throw new Error('Not authenticated');
 
-export const createProject = (payload) =>
-    supabase.from('projects').insert([payload]).select().single();
+    const { data: proj, error: e1 } = await supabase
+        .from('projects')
+        .insert([{ title, description, created_by: uid }])
+        .select('id,title,description,created_by,created_at')
+        .single();
+    if (e1) throw e1;
 
-export const updateProject = (id, patch) =>
-    supabase.from('projects').update(patch).eq('id', id).select().single();
+    const { error: e2 } = await supabase.from('project_members').insert([
+        { project_id: proj.id, user_id: uid, role: 'owner', status: 'active' }
+    ]);
+    if (e2 && !String(e2.message || '').includes('duplicate')) throw e2;
 
-export const softDeleteProject = (id) =>
-    supabase.from('projects').update({ deleted_at: new Date().toISOString(), is_deleted: true }).eq('id', id);
+    return proj;
+}
 
-/* ---------- Steps / Substeps ---------- */
-export const listSteps = (project_id) =>
-    supabase.from('steps').select('*').eq('project_id', project_id).order('idx');
+export async function softDeleteProject(projectId) {
+    const { error } = await supabase
+        .from('projects')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', projectId);
+    if (error) throw error;
+}
 
-export const createStep = (row) =>
-    supabase.from('steps').insert([row]).select().single(); // idx via trigger
-
-export const updateStep = (id, patch) =>
-    supabase.from('steps').update(patch).eq('id', id).select().single();
-
-export const softDeleteStep = (id) =>
-    supabase.from('steps').update({ deleted_at: new Date().toISOString() }).eq('id', id);
-
-export const moveStep = (project_id, step_id, dir /* 'up'|'down' */) =>
-    supabase.rpc('move_step', { p_project_id: project_id, p_step_id: step_id, p_dir: dir });
-
-export const listSubsteps = (parent_step_id) =>
-    supabase.from('substeps').select('*').eq('parent_step_id', parent_step_id).order('idx');
-
-export const createSubstep = (row) =>
-    supabase.from('substeps').insert([row]).select().single(); // project_id via trigger
-
-/* ---------- Items + linking ---------- */
-export const listItems = (project_id) =>
-    supabase.rpc('list_project_items', { p_project_id: project_id });
-
-export const upsertItem = (row) =>
-    supabase.from('items').upsert(row, { onConflict: 'id' }).select().single();
-
-export const attachItem = (step_id, item_id) =>
-    supabase.rpc('attach_item', { p_step_id: step_id, p_item_id: item_id });
-
-export const detachItem = (step_id, item_id) =>
-    supabase.rpc('detach_item', { p_step_id: step_id, p_item_id: item_id });
-
-export const setItemStatus = (project_id, item_id, status) =>
-    supabase.rpc('set_item_status', { p_project_id: project_id, p_item_id: item_id, p_status: status });
-
-/* ---------- Comments ---------- */
-export const listComments = (project_id, { step_id, substep_id } = {}) => {
-    let q = supabase.from('comments').select('*').eq('project_id', project_id)
-        .order('created_at', { ascending: false });
-    if (step_id) q = q.eq('step_id', step_id);
-    if (substep_id) q = q.eq('substep_id', substep_id);
-    return q;
-};
-export const addComment = (row) =>
-    supabase.from('comments').insert([row]).select().single();
-
-/* ---------- Chat ---------- */
-export const fetchChat = (project_id, recipient_id = null) =>
-    supabase.from('chat_messages')
-        .select('*')
-        .eq('project_id', project_id)
-        .is('recipient_id', recipient_id)
-        .order('created_at');
-
-export const sendChat = (row /* {project_id, sender_id, recipient_id?, body} */) =>
-    supabase.from('chat_messages').insert([row]).select().single();
-
-/* ---------- Flags ---------- */
-export const toggleFlag = (step_id, on = null) =>
-    supabase.rpc('toggle_step_flag', { p_step_id: step_id, p_on: on });
-
-export const listMyFlaggedStepIds = (project_id) =>
-    supabase.rpc('list_flagged_step_ids', { p_project_id: project_id });
-
-/* ---------- Members / Invites ---------- */
-export const listMembers = (project_id) =>
-    supabase.from('project_members').select('*').eq('project_id', project_id);
-
-export const inviteByEmail = (project_id, email, role = 'guest') =>
-    supabase.rpc('invite_member_by_email', { p_project_id: project_id, p_email: email, p_role: role });
-
-export const resendInvite = (invite_id) =>
-    supabase.rpc('resend_project_invite', { p_invite_id: invite_id });
-
-export const revokeInvite = (invite_id) =>
-    supabase.rpc('revoke_project_invite', { p_invite_id: invite_id });
-
-export const acceptInvite = (token) =>
-    supabase.rpc('accept_invite', { p_token: token });
-
-export const leaveProject = (project_id) =>
-    supabase.rpc('leave_project', { p_project_id: project_id });
-
-export const updateMemberRole = (project_id, user_id, role) =>
-    supabase.rpc('update_project_member_role', { p_project_id: project_id, p_user_id: user_id, p_role: role });
-
-/* ---------- Storage ---------- */
-export const uploadAvatar = (userId, file) =>
-    supabase.storage.from('avatars').upload(`${userId}/${crypto.randomUUID()}`, file);
-
-export const uploadProjectBg = (projectId, file) =>
-    supabase.storage.from('project-backgrounds').upload(`${projectId}/${crypto.randomUUID()}`, file);
-
-export const uploadProjectItem = (projectId, file) =>
-    supabase.storage.from('project-items').upload(`${projectId}/${crypto.randomUUID()}`, file);
+export async function getSignedFileURL(bucket, path, expiresInSeconds = 3600) {
+    if (!path) return null;
+    const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, expiresInSeconds);
+    if (error) throw error;
+    return data?.signedUrl || null;
+}

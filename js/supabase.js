@@ -1,30 +1,33 @@
-// C:\steptags2\js\supabase.js
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4'
+// Browser Supabase client (anon key only). No env magic. No typos.
+// Fill the two constants with your real values.
 
-if (!window.__env) window.__env = {}
-window.__env.SUPABASE_URL ??= 'https://vnkabkuqevummdugqige.supabase.co'
-window.__env.SUPABASE_ANON_KEY ??= 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZua2Fia3VxZXZ1bW1kdWdxaWdlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ1MTQwNTUsImV4cCI6MjA3MDA5MDA1NX0.MxMGH27JkLIhIrLdxa-oAsamUcrS3d5akGIu9WU86Q4'
-window.__env.REDIRECT_DASH ??= `${location.origin}/dashboard.html`
-window.__env.REDIRECT_LOGIN ??= `${location.origin}/login.html`
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-export const SUPABASE_REF = 'vnkabkuqevummdugqige'
+const SUPABASE_URL = 'https://vnkabkuqevummdugqige.supabase.co';         // <-- set
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZua2Fia3VxZXZ1bW1kdWdxaWdlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ1MTQwNTUsImV4cCI6MjA3MDA5MDA1NX0.MxMGH27JkLIhIrLdxa-oAsamUcrS3d5akGIu9WU86Q4';                    // <-- set (starts with eyJ...)
 
-export const supabase = createClient(
-    window.__env.SUPABASE_URL,
-    window.__env.SUPABASE_ANON_KEY,
-    {
-        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
-        global: { headers: { 'x-steptags': 'pro' } }
-    }
-)
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  throw new Error('Supabase URL/ANON key not set in js/supabase.js');
+}
+
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+});
 
 export async function requireAuth() {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) location.replace(window.__env.REDIRECT_LOGIN)
-    return session
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session) return session;
+
+  // Wait for OAuth redirect if coming back
+  const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => {
+    if (s) { subscription.unsubscribe(); location.reload(); }
+  });
+
+  location.replace('/login.html');
+  throw new Error('unauthenticated');
 }
 
 export async function redirectIfAuthed() {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (session) location.replace(window.__env.REDIRECT_DASH)
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session) location.replace('/dashboard.html');
 }
