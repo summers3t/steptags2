@@ -1,132 +1,77 @@
-// C:\steptags2\js\project.js
-// Live wiring for Project workspace. Defensive to existing markup.
-// Requires: /js/supabase.js exporting { supabase, requireAuth }.
-// Buckets: avatars, project-files (private). URL param: ?id=<project_uuid>.
+// Project workspace wiring. Requires ?id=<uuid>. Keeps existing DOM.
 
 import { supabase, requireAuth } from './supabase.js';
 
 const session = await requireAuth();
 const me = session.user;
+
 const qs = new URLSearchParams(location.search);
 const projectId = qs.get('id');
 if (!projectId) {
-  alert('Missing ?id=PROJECT_ID');
+  // open project page only through dashboard links
   location.replace('/dashboard.html');
-  throw new Error('no project id');
+  throw new Error('missing project id');
 }
 
-// ---------- small helpers ----------
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
-const fmtDate = (d) => (d ? new Date(d).toLocaleDateString() : '—');
 const nowISO = () => new Date().toISOString();
-const safe = (v) => (v ?? '');
-const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-
+const fmtDate = d => d ? new Date(d).toLocaleDateString() : '—';
+const humanSize = b => {
+  if (b == null) return '';
+  const u = ['B', 'KB', 'MB', 'GB']; let i = 0, n = b;
+  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++ }
+  return `${n.toFixed(n < 10 && i ? 1 : 0)} ${u[i]}`;
+};
 async function signedFrom(bucket, path, secs = 3600) {
   if (!path) return null;
   const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, secs);
   return error ? null : data?.signedUrl || null;
 }
+function refreshIcons() { try { window.feather && window.feather.replace(); } catch { } }
 
-function humanSize(b) {
-  if (b == null) return '';
-  const u = ['B','KB','MB','GB','TB']; let i = 0; let n = b;
-  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
-  return `${n.toFixed(n < 10 && i ? 1 : 0)} ${u[i]}`;
-}
+// state
+let project = null, members = [], steps = [], files = [];
+let undoBin = []; // [{type:'step', ids:string[], rows:any[] }]
 
-function setText(id, txt) { const el = document.getElementById(id); if (el) el.textContent = txt; }
-function setValue(id, val) { const el = document.getElementById(id); if (el) el.value = val ?? ''; }
+// load
+await Promise.all([
+  loadProject(), loadMembers(), loadSteps(), loadFiles(), loadActivities()
+]);
+renderProjectMeta(); renderDescription(); renderSteps(); renderBoard(); renderTimeline(); renderFiles(); refreshIcons();
 
-// ---------- state ----------
-let project = null;
-let members = [];
-let steps = [];
-let files = [];
-let undoBin = []; // [{type:'step', row, when: Date}]
-
-// ---------- load ----------
-await loadProject();
-await loadMembers();
-await loadSteps();
-await loadFiles();
-await loadActivities();
-
-renderProjectMeta();
-renderDescription();
-renderSteps();
-renderBoard();
-renderTimeline();
-renderFiles();
-refreshIcons();
-
-// ---------- header hydration minimal (name/avatar) ----------
-try {
-  const { data: prof } = await supabase.from('profiles').select('display_name,avatar_path,email').eq('id', me.id).maybeSingle();
-  const nm = $('#hdr-name'); if (nm) nm.textContent = prof?.display_name || me.email || 'User';
-  const av = $('#hdr-avatar'); if (av && prof?.avatar_path) {
-    const url = await signedFrom('avatars', prof.avatar_path);
-    if (url) av.src = url;
-  }
-} catch { /* noop */ }
-$('#logout-link')?.addEventListener('click', async (e) => { e.preventDefault(); await supabase.auth.signOut(); location.replace('/login.html'); });
-
-// ---------- tabs (if your DOM has .tab-btn and #tab-*) ----------
-(function initTabs() {
-  const tabBtns = $$('.tab-btn');
-  if (!tabBtns.length) return;
-  const set = (k) => {
-    tabBtns.forEach(b => {
-      const on = b.dataset.tab === k;
-      b.classList.toggle('tab-active', on);
-      const p = document.getElementById('tab-' + b.dataset.tab);
-      if (p) p.classList.toggle('hidden', !on);
-    });
-    refreshIcons();
-  };
-  tabBtns.forEach(b => b.addEventListener('click', () => set(b.dataset.tab)));
-  set('description');
-})();
-
-// ---------- settings modal open (if present) ----------
-$('#settings-open')?.addEventListener('click', () => $('#settings-modal')?.classList.remove('hidden'));
-
-// ---------- project ----------
+// -------- project --------
 async function loadProject() {
   const { data, error } = await supabase
     .from('projects')
-    .select('id,title,description,start_date,due_date,bg_path,created_by,updated_at')
+    .select('id,title,description,start_date,due_date,bg_path,updated_at')
     .eq('id', projectId)
     .maybeSingle();
   if (error) throw error;
   project = data;
 }
-
 function renderProjectMeta() {
-  setText('p-title', safe(project?.title) || '(Untitled)');
-  setText('p-title-inline', safe(project?.title) || '(Untitled)');
-  setText('p-desc', safe(project?.description));
-  setText('p-start', fmtDate(project?.start_date));
-  setText('p-due', fmtDate(project?.due_date));
-  setText('p-id', `id=${projectId}`);
-  // progress
-  const total = steps.length;
-  const done = steps.filter(s => s.done).length;
-  const pct = total ? Math.round((done / total) * 100) : 0;
+  const pct = (() => {
+    const total = steps.length, done = steps.filter(s => s.done).length;
+    return total ? Math.round(done / total * 100) : 0;
+  })();
+  $('#p-title') && ($('#p-title').textContent = project?.title || '(Untitled)');
+  $('#p-title-inline') && ($('#p-title-inline').textContent = project?.title || '(Untitled)');
+  $('#p-desc') && ($('#p-desc').textContent = project?.description || '');
+  $('#p-start') && ($('#p-start').textContent = fmtDate(project?.start_date));
+  $('#p-due') && ($('#p-due').textContent = fmtDate(project?.due_date));
+  $('#p-id') && ($('#p-id').textContent = `id=${projectId}`);
   const bar = $('#p-progress'); if (bar) bar.style.width = `${pct}%`;
-  setText('p-progress-label', `${pct}% complete`);
+  $('#p-progress-label') && ($('#p-progress-label').textContent = `${pct}% complete`);
 }
 
 function renderDescription() {
-  const form = $('#desc-form');
-  if (!form) return;
-  setValue('f_title', project?.title);
-  setValue('f_desc', project?.description);
-  setValue('f_start', project?.start_date);
-  setValue('f_due', project?.due_date);
+  const form = $('#desc-form'); if (!form) return;
+  $('#f_title') && ($('#f_title').value = project?.title || '');
+  $('#f_desc') && ($('#f_desc').value = project?.description || '');
+  $('#f_start') && ($('#f_start').value = project?.start_date || '');
+  $('#f_due') && ($('#f_due').value = project?.due_date || '');
 
-  // date pickers if flatpickr present
   if (window.flatpickr) {
     flatpickr('#f_start', { dateFormat: 'Y-m-d', weekNumbers: true, locale: { firstDayOfWeek: 1 } });
     flatpickr('#f_due', { dateFormat: 'Y-m-d', weekNumbers: true, locale: { firstDayOfWeek: 1 } });
@@ -140,18 +85,17 @@ function renderDescription() {
       description: String(fd.get('description') || '').trim() || null,
       start_date: fd.get('start_date') || null,
       due_date: fd.get('due_date') || null,
-      updated_at: nowISO(),
+      updated_at: nowISO()
     };
     const { error } = await supabase.from('projects').update(patch).eq('id', projectId);
-    const status = $('#desc-status');
-    if (error) { if (status) status.textContent = error.message; return; }
-    if (status) { status.textContent = 'Saved'; setTimeout(() => status.textContent = '', 1200); }
-    await loadProject();
-    renderProjectMeta();
+    const el = $('#desc-status');
+    if (error) { el && (el.textContent = error.message); return; }
+    el && (el.textContent = 'Saved'); setTimeout(() => { el && (el.textContent = '') }, 1200);
+    await loadProject(); renderProjectMeta();
   });
 }
 
-// ---------- team ----------
+// -------- members --------
 async function loadMembers() {
   const { data, error } = await supabase
     .from('project_members')
@@ -175,9 +119,8 @@ async function loadMembers() {
     list.appendChild(node);
   }
 }
-$('#btn-invite')?.addEventListener('click', () => alert('Invite flow handled elsewhere.'));
 
-// ---------- steps ----------
+// -------- steps --------
 async function loadSteps() {
   const { data, error } = await supabase
     .from('steps')
@@ -208,24 +151,21 @@ const statusLabelToToken = (lbl) => {
   if (x === 'done') return 'done';
   return 'open';
 };
-
-function childrenOf(pid) {
-  return steps.filter(s => s.parent_id === pid).sort((a,b)=> (a.order_num??0)-(b.order_num??0));
-}
+function childrenOf(pid) { return steps.filter(s => s.parent_id === pid).sort((a, b) => (a.order_num ?? 0) - (b.order_num ?? 0)); }
 
 function renderSteps() {
   const host = $('#stepsTree'); if (!host) return;
   host.innerHTML = '';
 
-  const renderBranch = (pid, container) => {
+  const branch = (pid, container) => {
     for (const s of childrenOf(pid)) {
       const li = document.createElement('li');
       li.dataset.id = s.id;
       li.innerHTML = `
         <div class="group flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-gray-50">
           <button class="toggle w-4 h-4 text-gray-400" aria-label="expand/collapse"></button>
-          <input type="checkbox" class="chk rounded" ${s.done ? 'checked' : ''} />
-          <input class="title flex-1 bg-transparent outline-none text-sm px-1 py-0.5 rounded focus:ring" value="${(s.title||'').replace(/"/g,'&quot;')}" />
+          <input type="checkbox" class="chk rounded" ${s.done ? 'checked' : ''}/>
+          <input class="title flex-1 bg-transparent outline-none text-sm px-1 py-0.5 rounded focus:ring" value="${(s.title || '').replace(/"/g, '&quot;')}"/>
           <span class="status-pill px-1.5 py-0.5 rounded border bg-gray-50">${statusTokenToLabel(s.status)}</span>
           <button class="date px-2 py-0.5 text-xs rounded bg-gray-100 border">${s.due_date || 'Due'}</button>
           <button class="add-sub text-xs px-2 py-1 rounded bg-gray-200">+ substep</button>
@@ -235,7 +175,7 @@ function renderSteps() {
       `;
       const ul = li.querySelector('ul');
 
-      // expand control
+      // expand
       const kids = childrenOf(s.id).length;
       const toggle = li.querySelector('.toggle');
       toggle.textContent = kids ? '▾' : '';
@@ -248,13 +188,11 @@ function renderSteps() {
       });
       if (kids) ul.classList.remove('hidden');
 
-      // checkbox
+      // done toggle
       li.querySelector('.chk').addEventListener('change', async (e) => {
         const { error } = await supabase.from('steps').update({ done: e.target.checked, updated_at: nowISO() }).eq('id', s.id);
         if (error) { e.target.checked = !e.target.checked; alert(error.message); return; }
-        s.done = e.target.checked;
-        renderProjectMeta();
-        insertActivity('step.toggle', 'steps', { id: s.id, title: s.title, done: s.done });
+        s.done = e.target.checked; renderProjectMeta(); insertActivity('step.toggle', 'steps', { id: s.id, done: s.done });
       });
 
       // title edit
@@ -262,43 +200,42 @@ function renderSteps() {
         const title = e.target.value.trim() || 'Untitled';
         const { error } = await supabase.from('steps').update({ title, updated_at: nowISO() }).eq('id', s.id);
         if (error) { alert(error.message); e.target.value = s.title; return; }
-        s.title = title;
-        insertActivity('step.edit', 'steps', { id: s.id, title });
+        s.title = title; insertActivity('step.edit', 'steps', { id: s.id, title });
       });
 
-      // status cycle on click
+      // status cycle
       li.querySelector('.status-pill').addEventListener('click', async (e) => {
-        const order = ['To Do','In Progress','In Review','Done'];
+        const order = ['To Do', 'In Progress', 'In Review', 'Done'];
         const cur = e.currentTarget.textContent.trim();
-        const idx = order.indexOf(cur);
-        const next = order[(idx + 1) % order.length];
+        const next = order[(order.indexOf(cur) + 1) % order.length];
         const token = statusLabelToToken(next);
         const { error } = await supabase.from('steps').update({ status: token, updated_at: nowISO() }).eq('id', s.id);
         if (error) { alert(error.message); return; }
-        s.status = token; e.currentTarget.textContent = next;
-        renderBoard(); insertActivity('step.status', 'steps', { id: s.id, status: token });
+        s.status = token; e.currentTarget.textContent = next; renderBoard();
+        insertActivity('step.status', 'steps', { id: s.id, status: token });
       });
 
-      // due date picker
+      // due date
       li.querySelector('.date').addEventListener('click', (ev) => {
         if (!window.flatpickr) return;
         flatpickr(ev.currentTarget, {
           dateFormat: 'Y-m-d', defaultDate: s.due_date || null, weekNumbers: true, locale: { firstDayOfWeek: 1 },
           onChange: async (sel) => {
-            const vv = sel[0] ? sel[0].toISOString().slice(0,10) : null;
+            const vv = sel[0] ? sel[0].toISOString().slice(0, 10) : null;
             const { error } = await supabase.from('steps').update({ due_date: vv, updated_at: nowISO() }).eq('id', s.id);
             if (error) { alert(error.message); return; }
-            s.due_date = vv; ev.currentTarget.textContent = vv || 'Due';
-            renderTimeline(); insertActivity('step.date', 'steps', { id: s.id, due_date: vv });
+            s.due_date = vv; ev.currentTarget.textContent = vv || 'Due'; renderTimeline();
+            insertActivity('step.date', 'steps', { id: s.id, due_date: vv });
           }
         }).open();
       });
 
-      // add substep
+      // add sub
       li.querySelector('.add-sub').addEventListener('click', async () => {
-        const orderNum = childrenOf(s.id).length;
-        const ins = { project_id: projectId, parent_id: s.id, title: 'New substep', status: 'open', done: false, order_num: orderNum };
-        const { data, error } = await supabase.from('steps').insert(ins).select('id').single();
+        const order = childrenOf(s.id).length;
+        const { data, error } = await supabase.from('steps').insert({
+          project_id: projectId, parent_id: s.id, title: 'New substep', status: 'open', done: false, order_num: order
+        }).select('id').single();
         if (error) { alert(error.message); return; }
         await loadSteps(); renderSteps(); renderBoard(); renderTimeline(); renderProjectMeta();
         insertActivity('step.add', 'steps', { id: data.id, parent_id: s.id });
@@ -308,34 +245,31 @@ function renderSteps() {
       li.querySelector('.del').addEventListener('click', async () => {
         const ids = [s.id, ...collectDescendantIds(s.id)];
         const rows = steps.filter(x => ids.includes(x.id));
-        undoBin.push({ type: 'step', rows, when: Date.now() });
-        showUndoBanner(`${rows.length} item(s) deleted`, async () => {
-          // undo: reinsert rows (topological by parent)
-          for (const r of rows) {
-            const payload = { ...r }; delete payload.created_at; delete payload.updated_at;
-            await supabase.from('steps').insert(payload);
-          }
+        undoBin.push({ type: 'step', ids, rows });
+        showUndo(`${rows.length} item(s) deleted`, async () => {
+          for (const r of rows) { const payload = { ...r }; delete payload.created_at; delete payload.updated_at; await supabase.from('steps').insert(payload); }
           await loadSteps(); renderSteps(); renderBoard(); renderTimeline(); renderProjectMeta();
         });
-        // perform delete after 5s if not undone
-        await sleep(5000);
-        // if still present in undoBin, commit deletion
-        if (undoBin.find(u => u.type === 'step' && u.rows[0].id === s.id)) {
-          const { error } = await supabase.from('steps').delete().in('id', ids);
-          if (error) { alert(error.message); }
-          undoBin = undoBin.filter(u => !(u.type === 'step' && u.rows[0].id === s.id));
-          await loadSteps(); renderSteps(); renderBoard(); renderProjectMeta();
-          insertActivity('step.delete', 'steps', { ids });
-        }
+        // commit delete after 5s if not undone
+        setTimeout(async () => {
+          const idx = undoBin.findIndex(u => u.type === 'step' && u.ids[0] === ids[0]);
+          if (idx !== -1) { // still pending
+            const { error } = await supabase.from('steps').delete().in('id', ids);
+            if (error) { alert(error.message); return; }
+            undoBin.splice(idx, 1);
+            await loadSteps(); renderSteps(); renderBoard(); renderProjectMeta();
+            insertActivity('step.delete', 'steps', { ids });
+          }
+        }, 5000);
       });
 
       container.appendChild(li);
-      renderBranch(s.id, ul);
+      branch(s.id, ul);
     }
   };
-  renderBranch(null, host);
+  branch(null, host);
 
-  // optional Sortable ordering for top-level items
+  // optional Sortable top-level
   if (window.Sortable) {
     new Sortable(host, {
       animation: 150,
@@ -350,14 +284,7 @@ function renderSteps() {
   }
   refreshIcons();
 }
-
-function collectDescendantIds(pid) {
-  const acc = [];
-  (function rec(id){ childrenOf(id).forEach(ch => { acc.push(ch.id); rec(ch.id); }); })(pid);
-  return acc;
-}
-
-// add top-level step
+function collectDescendantIds(pid) { const a = []; (function rec(id) { childrenOf(id).forEach(ch => { a.push(ch.id); rec(ch.id); }); })(pid); return a; }
 $('#addStepBtn')?.addEventListener('click', async () => {
   const order = childrenOf(null).length;
   const { data, error } = await supabase.from('steps').insert({
@@ -368,24 +295,20 @@ $('#addStepBtn')?.addEventListener('click', async () => {
   insertActivity('step.add', 'steps', { id: data.id });
 });
 
-// bulk import (if modal exists)
+// bulk import
 $('#bulkImportBtn')?.addEventListener('click', () => $('#modalImport')?.showModal());
 $('#m_import_apply')?.addEventListener('click', async (e) => {
   e.preventDefault();
   const text = $('#m_import_text')?.value || '';
-  const lines = text.split('\n');
-  const stack = [null];
-  const rows = [];
+  const lines = text.split('\n'); const stack = [null]; const rows = [];
   for (const raw of lines) {
-    const line = raw.replace(/\t/g, '  ');
-    if (!line.trim()) continue;
+    const line = raw.replace(/\t/g, '  '); if (!line.trim()) continue;
     const indent = ((line.match(/^(\s*)/)?.[0].length) || 0) / 2;
     const title = line.replace(/^\s*[-*]?\s*/, '').trim() || 'Untitled';
     const parent_id = stack[indent] ?? null;
     const order_num = rows.filter(r => r.parent_id === parent_id).length;
     rows.push({ project_id: projectId, parent_id, title, status: 'open', done: false, order_num });
-    stack[indent + 1] = 'tmp' + rows.length;
-    stack.length = indent + 2;
+    stack[indent + 1] = 'tmp' + rows.length; stack.length = indent + 2;
   }
   for (const r of rows) {
     const payload = { ...r };
@@ -397,7 +320,7 @@ $('#m_import_apply')?.addEventListener('click', async (e) => {
   insertActivity('step.import', 'steps', { count: rows.length });
 });
 
-// ---------- board ----------
+// -------- board --------
 function renderBoard() {
   const host = $('#boardColumns'); if (!host) return;
   host.innerHTML = '';
@@ -414,28 +337,24 @@ function renderBoard() {
     col.innerHTML = `<header class="text-xs font-semibold px-1 py-1">${c.title}</header><div class="flex-1 space-y-2" data-zone></div>`;
     host.appendChild(col);
   }
-  // cards: only top-level
   steps.filter(s => s.parent_id === null).forEach(s => {
     const zone = host.querySelector(`[data-col="${s.status || 'open'}"] [data-zone]`) || host.querySelector('[data-col="open"] [data-zone]');
     const card = document.createElement('div');
     card.className = 'rounded-lg bg-white shadow p-2 text-sm border cursor-move';
-    card.draggable = true;
-    card.dataset.id = s.id;
-    card.innerHTML = `
-      <div class="flex items-center justify-between gap-2">
-        <span class="${s.done ? 'line-through text-gray-400':''}">${s.title}</span>
-        <span class="text-[10px] px-1.5 py-0.5 rounded border bg-gray-50">${statusTokenToLabel(s.status)}</span>
-      </div>`;
+    card.draggable = true; card.dataset.id = s.id;
+    card.innerHTML = `<div class="flex items-center justify-between gap-2">
+      <span class="${s.done ? 'line-through text-gray-400' : ''}">${s.title}</span>
+      <span class="text-[10px] px-1.5 py-0.5 rounded border bg-gray-50">${statusTokenToLabel(s.status)}</span>
+    </div>`;
     zone?.appendChild(card);
-    card.addEventListener('dragstart', ev => { ev.dataTransfer.setData('text/plain', s.id); ev.dataTransfer.effectAllowed='move'; });
+    card.addEventListener('dragstart', ev => { ev.dataTransfer.setData('text/plain', s.id); ev.dataTransfer.effectAllowed = 'move'; });
   });
   $$('#boardColumns [data-zone]').forEach(zone => {
     zone.addEventListener('dragover', e => e.preventDefault());
     zone.addEventListener('drop', async (e) => {
       e.preventDefault();
       const id = e.dataTransfer.getData('text/plain');
-      const s = steps.find(x => x.id === id);
-      if (!s) return;
+      const s = steps.find(x => x.id === id); if (!s) return;
       const col = e.currentTarget.closest('[data-col]').dataset.col;
       if (s.status === col) return;
       const { error } = await supabase.from('steps').update({ status: col, updated_at: nowISO() }).eq('id', id);
@@ -446,28 +365,25 @@ function renderBoard() {
   });
 }
 
-// ---------- timeline (simple) ----------
+// -------- timeline --------
 function renderTimeline() {
   const wrap = $('#timelineCanvas'); if (!wrap) return;
-  wrap.innerHTML = '';
-  const tops = steps.filter(s => s.parent_id === null);
+  wrap.innerHTML = ''; const tops = steps.filter(s => s.parent_id === null);
   const box = document.createElement('div'); box.className = 'relative h-[200px]';
   tops.forEach((s, i) => {
     const bar = document.createElement('div');
     bar.className = 'absolute left-0 right-10 h-6 rounded bg-gray-200 border';
     bar.style.top = `${10 + i * 28}px`;
     const d = s.due_date ? new Date(s.due_date) : null;
-    const day = d ? ((d.getDay() || 7)) : 7; // 1..7
-    const pct = (day - 1) / 6;
-    bar.style.marginLeft = `calc(${pct * 100}% - 0px)`;
-    bar.style.width = '30%';
+    const day = d ? ((d.getDay() || 7)) : 7; // Mon..Sun => 1..7
+    bar.style.marginLeft = `calc(${((day - 1) / 6) * 100}% - 0px)`; bar.style.width = '30%';
     bar.title = `${s.title}${s.due_date ? ` • ${s.due_date}` : ''}`;
     box.appendChild(bar);
   });
   wrap.appendChild(box);
 }
 
-// ---------- files ----------
+// -------- files --------
 async function loadFiles() {
   const { data, error } = await supabase
     .from('files')
@@ -478,42 +394,40 @@ async function loadFiles() {
   if (error) { files = []; return; }
   files = data || [];
 }
-
 async function renderFiles() {
   const list = $('#fileList'); if (!list) return;
-  const tpl = $('#file-item-tpl');
-  list.innerHTML = '';
+  const tpl = $('#file-item-tpl'); list.innerHTML = '';
   for (const f of files) {
-    let url = await signedFrom('project-files', f.path);
-    const li = tpl ? tpl.content.cloneNode(true) : document.createElement('li');
-    if (!tpl) li.className = 'p-3 flex items-center gap-3';
-    const a = tpl ? li.querySelector('[data-prop="name"]') : (()=>{ const a=document.createElement('a'); a.className='text-sm text-indigo-700 hover:text-indigo-900'; li.appendChild(a); return a; })();
-    a.textContent = f.name; a.href = url || '#'; a.target = '_blank'; a.rel = 'noopener';
-    const sz = tpl ? li.querySelector('[data-prop="size"]') : (()=>{ const sp=document.createElement('span'); sp.className='text-xs text-gray-500'; li.appendChild(sp); return sp; })();
-    sz.textContent = humanSize(f.size);
-    const by = tpl ? li.querySelector('[data-prop="by"]') : (()=>{ const sp=document.createElement('span'); sp.className='text-xs text-gray-500 ml-auto'; li.appendChild(sp); return sp; })();
+    const node = tpl ? tpl.content.cloneNode(true) : document.createElement('li');
+    if (!tpl) node.className = 'p-3 flex items-center gap-3';
+    const a = tpl ? node.querySelector('[data-prop="name"]') : document.createElement('a');
+    if (!tpl) { a.className = 'text-sm text-indigo-700 hover:text-indigo-900'; node.appendChild(a); }
+    a.textContent = f.name; a.href = await signedFrom('project-files', f.path) || '#'; a.target = '_blank'; a.rel = 'noopener';
+    const sizeEl = tpl ? node.querySelector('[data-prop="size"]') : document.createElement('span');
+    if (!tpl) { sizeEl.className = 'text-xs text-gray-500'; node.appendChild(sizeEl); }
+    sizeEl.textContent = humanSize(f.size);
+    const byEl = tpl ? node.querySelector('[data-prop="by"]') : document.createElement('span');
+    if (!tpl) { byEl.className = 'text-xs text-gray-500 ml-auto'; node.appendChild(byEl); }
     try {
       const { data: p } = await supabase.from('profiles').select('display_name,email').eq('id', f.uploaded_by).maybeSingle();
-      by.textContent = p ? `by ${p.display_name || p.email || ''}` : '';
-    } catch {}
-    list.appendChild(li);
+      byEl.textContent = p ? `by ${p.display_name || p.email || ''}` : '';
+    } catch { }
+    list.appendChild(node);
   }
   refreshIcons();
 }
-
 $('#file-browse')?.addEventListener('click', () => $('#file-input')?.click());
 $('#file-input')?.addEventListener('change', (e) => handleFiles([...e.target.files || []]));
 const drop = $('#dropzone');
 if (drop) {
-  ['dragover','dragenter'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('active'); }));
-  ['dragleave','drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('active'); }));
+  ['dragover', 'dragenter'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('active'); }));
+  ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('active'); }));
   drop.addEventListener('drop', (e) => handleFiles([...e.dataTransfer.files || []]));
 }
-
 async function handleFiles(list) {
   if (!list.length) return;
   for (const f of list) {
-    const path = `${projectId}/${Date.now()}_${f.name.replace(/[^\w.\- ]+/g,'_')}`;
+    const path = `${projectId}/${Date.now()}_${f.name.replace(/[^\w.\- ]+/g, '_')}`;
     const up = await supabase.storage.from('project-files').upload(path, f, { upsert: false });
     if (up.error) { alert(up.error.message); continue; }
     const row = { project_id: projectId, name: f.name, mime: f.type || 'application/octet-stream', size: f.size, path, uploaded_by: me.id };
@@ -523,7 +437,7 @@ async function handleFiles(list) {
   await loadFiles(); renderFiles();
 }
 
-// ---------- activity ----------
+// -------- activity --------
 async function loadActivities() {
   const list = $('#activityFeed'); if (!list) return;
   const { data, error } = await supabase
@@ -538,8 +452,8 @@ async function loadActivities() {
   for (const r of (data || [])) {
     const node = tpl ? tpl.content.cloneNode(true) : document.createElement('li');
     if (!tpl) node.className = 'p-3 flex items-start gap-3';
-    const line = tpl ? node.querySelector('[data-prop="line"]') : (()=>{ const p=document.createElement('p'); p.className='text-sm'; node.appendChild(p); return p; })();
-    const when = tpl ? node.querySelector('[data-prop="when"]') : (()=>{ const p=document.createElement('p'); p.className='text-xs text-gray-400'; node.appendChild(p); return p; })();
+    const line = tpl ? node.querySelector('[data-prop="line"]') : (() => { const p = document.createElement('p'); p.className = 'text-sm'; node.appendChild(p); return p; })();
+    const when = tpl ? node.querySelector('[data-prop="when"]') : (() => { const p = document.createElement('p'); p.className = 'text-xs text-gray-400'; node.appendChild(p); return p; })();
     const avatar = tpl ? node.querySelector('[data-prop="avatar"]') : null;
     line.textContent = r.kind || 'activity';
     when.textContent = new Date(r.created_at).toLocaleString();
@@ -552,41 +466,33 @@ async function loadActivities() {
     list.appendChild(node);
   }
 }
-
 async function insertActivity(kind, ref_table, meta) {
   await supabase.from('activities').insert({ project_id: projectId, actor_id: me.id, kind, ref_table, meta });
-  // Best effort refresh
   loadActivities();
 }
 
-// ---------- realtime ----------
-const ch = supabase
+// -------- realtime --------
+supabase
   .channel(`steps-${projectId}`)
   .on('postgres_changes', { event: '*', schema: 'public', table: 'steps', filter: `project_id=eq.${projectId}` }, async () => {
-    await loadSteps();
-    renderSteps(); renderBoard(); renderTimeline(); renderProjectMeta();
+    await loadSteps(); renderSteps(); renderBoard(); renderTimeline(); renderProjectMeta();
   })
   .subscribe();
 
-// ---------- misc ----------
-function showUndoBanner(text, onUndo) {
-  let bar = document.getElementById('undo-bar');
-  if (!bar) {
-    bar = document.createElement('div');
-    bar.id = 'undo-bar';
-    bar.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 bg-white border shadow-lg rounded-lg px-4 py-2 flex items-center gap-3 z-50';
-    document.body.appendChild(bar);
+// -------- undo banner --------
+function showUndo(text, onUndo) {
+  let el = document.getElementById('undo-bar');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'undo-bar';
+    el.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 bg-white border shadow-lg rounded-lg px-4 py-2 flex items-center gap-3 z-50';
+    document.body.appendChild(el);
   }
-  bar.innerHTML = `<span class="text-sm">${text}</span><button id="undo-btn" class="text-sm text-indigo-700 hover:text-indigo-900 underline">Undo</button>`;
-  $('#undo-btn', bar)?.addEventListener('click', async () => {
-    const entry = undoBin.pop();
-    if (entry && typeof onUndo === 'function') await onUndo();
-    bar.remove();
+  el.innerHTML = `<span class="text-sm">${text}</span><button id="undo-btn" class="text-sm text-indigo-700 hover:text-indigo-900 underline">Undo</button>`;
+  $('#undo-btn', el)?.addEventListener('click', async () => {
+    const last = undoBin.pop();
+    if (last && typeof onUndo === 'function') await onUndo();
+    el.remove();
   });
-  setTimeout(() => { if (document.body.contains(bar)) bar.remove(); }, 5200);
+  setTimeout(() => { if (document.body.contains(el)) el.remove(); }, 5200);
 }
-
-function refreshIcons() { try { window.feather && window.feather.replace(); } catch {} }
-
-// keep icons refreshed after mutations
-new MutationObserver(() => refreshIcons()).observe(document.body, { childList: true, subtree: true });

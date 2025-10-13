@@ -1,6 +1,5 @@
-// C:\steptags2\js\dashboard.js
-// Lists ONLY projects where current user is a member.
-// Also wires cards to /projects/project.html?id=<uuid>.
+// Lists ONLY projects where the current user is a member.
+// Cards link to /projects/project.html?id=<uuid>
 
 import { supabase, requireAuth } from './supabase.js';
 
@@ -9,33 +8,8 @@ const me = session.user;
 
 const $ = (s, el = document) => el.querySelector(s);
 
-async function hydrateHeader() {
-  try {
-    const { data: prof } = await supabase
-      .from('profiles')
-      .select('display_name,avatar_path,email')
-      .eq('id', me.id)
-      .maybeSingle();
-
-    const nameEl = $('#hdr-name');
-    if (nameEl) nameEl.textContent = prof?.display_name || me.email || 'User';
-
-    if (prof?.avatar_path) {
-      const { data } = await supabase.storage
-        .from('avatars')
-        .createSignedUrl(prof.avatar_path, 3600);
-      if (data?.signedUrl) {
-        const img = $('#hdr-avatar');
-        if (img) img.src = data.signedUrl;
-      }
-    }
-  } catch (e) {
-    console.error('header hydrate error', e);
-  }
-}
-
 async function loadProjects() {
-  // Pull membership rows for this user, with joined project fields.
+  // read via membership to respect RLS and avoid full table reads
   const { data, error } = await supabase
     .from('project_members')
     .select(`
@@ -48,20 +22,15 @@ async function loadProjects() {
     .order('updated_at', { referencedTable: 'projects', ascending: false });
 
   if (error) {
-    console.error('loadProjects error', error);
-    renderProjects([]);
+    console.error('projects load error', error);
+    render([]);
     return;
   }
-
-  // Map to project list, guard against null joins.
-  const rows = (data || [])
-    .map(r => r.projects)
-    .filter(Boolean);
-
-  renderProjects(rows);
+  const rows = (data || []).map(r => r.projects).filter(Boolean);
+  render(rows);
 }
 
-function renderProjects(rows) {
+function render(rows) {
   const list = document.getElementById('projectsList');
   if (!list) return;
   list.innerHTML = '';
@@ -87,7 +56,6 @@ function renderProjects(rows) {
     `;
     list.appendChild(li);
   }
-
   if (window.feather) window.feather.replace();
 }
 
@@ -97,5 +65,4 @@ document.getElementById('logout-link')?.addEventListener('click', async (e) => {
   location.replace('/login.html');
 });
 
-await hydrateHeader();
 await loadProjects();
