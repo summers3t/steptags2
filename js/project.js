@@ -1,468 +1,744 @@
 // C:\steptags2\js\project.js
-// Wire existing project workspace to Supabase. Requires ?id=<uuid>. No UI changes.
+// Wire project page to real data using existing DOM (no HTML edits).
+import { supabase } from './supabase.js';
+import {
+  getProject, getMembership, canWrite,
+  listSteps, createStep, updateStep, reorderSteps,
+  subscribeSteps, logActivity, deleteStep,
+  listActivities, subscribeActivities,
+  getSignedFileURL, fetchProfilesMap, fetchStepsMap
+} from './api.js';
 
-import { supabase, requireAuth } from './supabase.js';
+const $ = (s, el = document) => el.querySelector(s);
+const byId = (id) => document.getElementById(id);
 
-const session = await requireAuth();
-const me = session.user;
+const ui2db = { todo: 'open', inprogress: 'in_progress', review: 'review', done: 'done' };
+const db2ui = (s) => ({ open: 'todo', in_progress: 'inprogress', review: 'review', done: 'done' }[(s || '').toLowerCase()] || 'todo');
 
-const qs = new URLSearchParams(location.search);
-const projectId = qs.get('id');
-if (!projectId) {
-  location.replace('/dashboard.html');
-  throw new Error('missing project id');
-}
-
-const $ = (s, el=document) => el.querySelector(s);
-const $$ = (s, el=document) => [...el.querySelectorAll(s)];
-const nowISO = () => new Date().toISOString();
-const fmtDate = d => d ? new Date(d).toLocaleDateString() : '—';
-const sleep = ms => new Promise(r => setTimeout(r, ms));
-
-async function signedFrom(bucket, path, secs=3600){
-  if(!path) return null;
-  const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, secs);
-  return error ? null : data?.signedUrl || null;
-}
-function humanSize(b){ if(b==null) return ''; const u=['B','KB','MB','GB']; let i=0,n=b; while(n>=1024&&i<u.length-1){n/=1024;i++} return `${n.toFixed(n<10&&i?1:0)} ${u[i]}`; }
-function refreshIcons(){ try{ window.feather && window.feather.replace(); }catch{} }
-
-// State
-let project=null, members=[], steps=[], files=[];
-let undoBin=[];
-
-// Load
-await Promise.all([loadProject(), loadMembers(), loadSteps(), loadFiles(), loadActivities()]);
-renderProjectMeta(); renderDescription(); renderSteps(); renderBoard(); renderTimeline(); renderFiles(); refreshIcons();
-
-// ---------- Project ----------
-async function loadProject(){
-  const { data, error } = await supabase
-    .from('projects')
-    .select('id,title,description,start_date,due_date,bg_path,updated_at')
-    .eq('id', projectId)
-    .maybeSingle();
-  if (error) throw error;
-  project = data;
-}
-function renderProjectMeta(){
-  const total = steps.length, done = steps.filter(s=>s.done).length;
-  const pct = total ? Math.round(done/total*100) : 0;
-
-  $('#p-title') && ($('#p-title').textContent = project?.title || '(Untitled)');
-  $('#p-title-inline') && ($('#p-title-inline').textContent = project?.title || '(Untitled)');
-  $('#p-desc') && ($('#p-desc').textContent = project?.description || '');
-  $('#p-start') && ($('#p-start').textContent = fmtDate(project?.start_date));
-  $('#p-due') && ($('#p-due').textContent = fmtDate(project?.due_date));
-  $('#p-id') && ($('#p-id').textContent = `id=${projectId}`);
-  const bar = $('#p-progress'); if (bar) bar.style.width = `${pct}%`;
-  $('#p-progress-label') && ($('#p-progress-label').textContent = `${pct}% complete`);
-}
-
-function renderDescription(){
-  const form = $('#desc-form'); if (!form) return;
-
-  $('#f_title') && ($('#f_title').value = project?.title || '');
-  $('#f_desc') && ($('#f_desc').value = project?.description || '');
-  $('#f_start') && ($('#f_start').value = project?.start_date || '');
-  $('#f_due') && ($('#f_due').value = project?.due_date || '');
-
-  if (window.flatpickr) {
-    flatpickr('#f_start', { dateFormat:'Y-m-d', weekNumbers:true, locale:{ firstDayOfWeek:1 }});
-    flatpickr('#f_due', { dateFormat:'Y-m-d', weekNumbers:true, locale:{ firstDayOfWeek:1 }});
-  }
-
-  form.addEventListener('submit', async (e)=>{
-    e.preventDefault();
-    const fd = new FormData(form);
-    const patch = {
-      title: String(fd.get('title')||'').trim() || '(Untitled)',
-      description: String(fd.get('description')||'').trim() || null,
-      start_date: fd.get('start_date') || null,
-      due_date: fd.get('due_date') || null,
-      updated_at: nowISO()
-    };
-    const { error } = await supabase.from('projects').update(patch).eq('id', projectId);
-    const el = $('#desc-status');
-    if (error){ el && (el.textContent = error.message); return; }
-    el && (el.textContent = 'Saved'); setTimeout(()=>{ el && (el.textContent='') }, 1200);
-    await loadProject(); renderProjectMeta();
-  });
-}
-
-// ---------- Members ----------
-async function loadMembers(){
-  const { data, error } = await supabase
-    .from('project_members')
-    .select('role,user_id,profiles:profiles!project_members_user_id_fkey(display_name,email,avatar_path)')
-    .eq('project_id', projectId);
-  if (error){ members=[]; return; }
-  members = data || [];
-
-  const list = $('#team-list'); const tpl = $('#team-item-tpl');
-  if (!list || !tpl) return;
-  list.innerHTML = '';
-  for (const m of members){
-    const node = tpl.content.cloneNode(true);
-    node.querySelector('[data-prop="name"]').textContent = m.profiles?.display_name || 'Member';
-    node.querySelector('[data-prop="email"]').textContent = m.profiles?.email || '';
-    node.querySelector('[data-prop="role"]').textContent = m.role || '';
-    const img = node.querySelector('[data-prop="avatar"]');
-    if (m.profiles?.avatar_path) {
-      const url = await signedFrom('avatars', m.profiles.avatar_path);
-      img.src = url || 'https://i.pravatar.cc/64?img=1';
-    } else img.src = 'https://i.pravatar.cc/64?img=1';
-    list.appendChild(node);
-  }
-}
-
-// ---------- Steps ----------
-async function loadSteps(){
-  const { data, error } = await supabase
-    .from('steps')
-    .select('id,project_id,parent_id,title,assignee_id,status,done,due_date,order_num,created_at,updated_at')
-    .eq('project_id', projectId)
-    .order('parent_id',{ascending:true})
-    .order('order_num',{ascending:true});
-  if (error){ steps=[]; return; }
-  steps = data || [];
-}
-
-const statusTokenToLabel = (t)=>{
-  switch((t||'').toLowerCase()){
-    case 'open':
-    case 'todo': return 'To Do';
-    case 'in_progress':
-    case 'inprogress': return 'In Progress';
-    case 'review': return 'In Review';
-    case 'done': return 'Done';
-    default: return 'To Do';
-  }
+const state = {
+  id: null,
+  role: 'viewer',
+  project: null,
+  steps: [],
+  unsub: null,
+  sortableSteps: null,
+  boardOrder: { backlog: [], inprogress: [], review: [], done: [] },
 };
-const statusLabelToToken = (lbl)=>{
-  const x=(lbl||'').toLowerCase();
-  if (x.startsWith('to do')) return 'open';
-  if (x.startsWith('in progress')) return 'in_progress';
-  if (x.startsWith('in review')||x==='review') return 'review';
-  if (x==='done') return 'done';
-  return 'open';
-};
-function childrenOf(pid){ return steps.filter(s=>s.parent_id===pid).sort((a,b)=>(a.order_num??0)-(b.order_num??0)); }
 
-function renderSteps(){
-  const host = $('#stepsTree'); if (!host) return;
-  host.innerHTML = '';
+function pid() {
+  const u = new URL(location.href);
+  return u.searchParams.get('id') || u.searchParams.get('project') || null;
+}
+function toast(msg) {
+  const t = document.createElement('div');
+  t.className = 'fixed bottom-4 right-4 px-3 py-2 bg-indigo-100 text-indigo-800 rounded-md shadow z-50';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2000);
+}
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m])); }
 
-  const branch = (pid, container)=>{
-    for (const s of childrenOf(pid)){
-      const li = document.createElement('li');
-      li.dataset.id = s.id;
-      li.innerHTML = `
-        <div class="group flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-gray-50">
-          <button class="toggle w-4 h-4 text-gray-400" aria-label="expand/collapse"></button>
-          <input type="checkbox" class="chk rounded" ${s.done?'checked':''}/>
-          <input class="title flex-1 bg-transparent outline-none text-sm px-1 py-0.5 rounded focus:ring" value="${(s.title||'').replace(/"/g,'&quot;')}"/>
-          <span class="status-pill px-1.5 py-0.5 rounded border bg-gray-50">${statusTokenToLabel(s.status)}</span>
-          <button class="date px-2 py-0.5 text-xs rounded bg-gray-100 border">${s.due_date||'Due'}</button>
-          <button class="add-sub text-xs px-2 py-1 rounded bg-gray-200">+ substep</button>
-          <button class="del text-xs px-2 py-1 rounded bg-red-50 text-red-700 opacity-0 group-hover:opacity-100">Delete</button>
+document.addEventListener('DOMContentLoaded', boot);
+
+async function boot() {
+  const id = pid(); if (!id) { location.replace('/dashboard.html'); return; }
+  state.id = id;
+
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth?.user?.id) { location.replace('/login.html'); return; }
+
+  const [proj, mem] = await Promise.all([getProject(id), getMembership(id).catch(() => null)]);
+  if (!proj) { toast('No access to project'); location.replace('/dashboard.html'); return; }
+  state.project = proj;
+  state.role = mem?.role || 'viewer';
+
+  hydrateHeaderTitle();
+  await hydrateDescription();
+  await loadSteps();
+  initBoardOrderFromSteps();
+  renderBoardFromSteps();
+  updateBoardCounts();
+
+  // Modals guaranteed to work regardless of inline script
+  wireSettingsModal();
+  wireChatModal();
+  wrapOpenAddStepModal(); // hook DB save into your existing #step-modal
+
+  wireTimelineTab();
+  wireBoardTab();
+  wireActivityTab();
+  startActivityRealtime();
+
+  if (!byId('activity-content')?.classList.contains('hidden')) await renderActivity(false);
+
+  mountRealtime();
+}
+
+/* ---------------- Header / Description ---------------- */
+function hydrateHeaderTitle() {
+  const t = state.project?.title || 'Project';
+  const h = byId('project-title') || $('[data-project="title"]') || $('h1');
+  if (h) h.textContent = t;
+}
+async function hydrateDescription() {
+  const descP = $('#description-content .bg-white.border.border-gray-200.rounded-lg.p-4 p.text-sm') ||
+    $('#description-content p.text-sm');
+  if (descP) descP.textContent = state.project?.description || 'No description yet.';
+
+  const dueEl = byId('due-date') || $('[name="due_date"]');
+  if (dueEl) dueEl.value = state.project?.due_date || '';
+
+  const bgImg = byId('project-bg-img') || byId('bgImg');
+  const bg = state.project?.background;
+  if (bgImg && bg) {
+    try { const url = await getSignedFileURL('project-files', bg, 3600); if (url) bgImg.src = url; } catch { }
+  }
+}
+
+/* ---------------- Steps tab ---------------- */
+function stepsHost() { return byId('steps-tree'); }
+
+function stepRowMarkup(step, showActions) {
+  const uiStatus = db2ui(step.status);
+  const due = step.due_date ? new Date(step.due_date).toISOString().slice(0, 10) : '';
+  const title = step.name || '(untitled)';
+  return `
+  <div class="step-item bg-white p-3 rounded-lg border border-gray-200 relative" data-id="${step.id}">
+    <div class="flex items-start">
+      <button class="mr-2 text-gray-400 hover:text-gray-600" aria-label="Collapse/Expand">
+        <i data-feather="chevron-right" class="w-4 h-4"></i>
+      </button>
+      <div class="flex-grow">
+        <div class="flex items-center">
+          <select class="text-xs px-2 py-1 rounded mr-2 status-select" data-field="status">
+            <option value="todo" ${uiStatus === 'todo' ? 'selected' : ''}>To Do</option>
+            <option value="inprogress" ${uiStatus === 'inprogress' ? 'selected' : ''}>In Progress</option>
+            <option value="review" ${uiStatus === 'review' ? 'selected' : ''}>Review</option>
+            <option value="done" ${uiStatus === 'done' ? 'selected' : ''}>Done</option>
+          </select>
+          <input type="text" class="font-medium flex-grow focus:outline-none" data-field="title" value="${escapeHtml(title)}" />
         </div>
-        <ul class="ml-5 pl-3 border-l border-gray-200 space-y-1 hidden"></ul>
-      `;
-      const ul = li.querySelector('ul');
-
-      // expand
-      const kids = childrenOf(s.id).length;
-      const toggle = li.querySelector('.toggle');
-      toggle.textContent = kids ? '▾' : '';
-      toggle.dataset.state='open';
-      toggle.addEventListener('click', ()=>{
-        const open = toggle.dataset.state!=='closed';
-        toggle.dataset.state = open?'closed':'open';
-        toggle.textContent = kids ? (open?'▸':'▾') : '';
-        ul.classList.toggle('hidden', open);
-      });
-      if (kids) ul.classList.remove('hidden');
-
-      // done
-      li.querySelector('.chk').addEventListener('change', async (e)=>{
-        const { error } = await supabase.from('steps').update({ done: e.target.checked, updated_at: nowISO() }).eq('id', s.id);
-        if (error){ e.target.checked=!e.target.checked; alert(error.message); return; }
-        s.done = e.target.checked; renderProjectMeta(); insertActivity('step.toggle','steps',{ id:s.id, done:s.done });
-      });
-
-      // title
-      li.querySelector('.title').addEventListener('change', async (e)=>{
-        const title = e.target.value.trim() || 'Untitled';
-        const { error } = await supabase.from('steps').update({ title, updated_at: nowISO() }).eq('id', s.id);
-        if (error){ alert(error.message); e.target.value = s.title; return; }
-        s.title = title; insertActivity('step.edit','steps',{ id:s.id, title });
-      });
-
-      // status
-      li.querySelector('.status-pill').addEventListener('click', async (e)=>{
-        const order = ['To Do','In Progress','In Review','Done'];
-        const cur = e.currentTarget.textContent.trim();
-        const next = order[(order.indexOf(cur)+1) % order.length];
-        const token = statusLabelToToken(next);
-        const { error } = await supabase.from('steps').update({ status: token, updated_at: nowISO() }).eq('id', s.id);
-        if (error){ alert(error.message); return; }
-        s.status = token; e.currentTarget.textContent = next; renderBoard();
-        insertActivity('step.status','steps',{ id:s.id, status: token });
-      });
-
-      // due date
-      li.querySelector('.date').addEventListener('click', (ev)=>{
-        if (!window.flatpickr) return;
-        flatpickr(ev.currentTarget, {
-          dateFormat:'Y-m-d', defaultDate: s.due_date || null, weekNumbers:true, locale:{ firstDayOfWeek:1 },
-          onChange: async (sel)=>{
-            const vv = sel[0] ? sel[0].toISOString().slice(0,10) : null;
-            const { error } = await supabase.from('steps').update({ due_date: vv, updated_at: nowISO() }).eq('id', s.id);
-            if (error){ alert(error.message); return; }
-            s.due_date = vv; ev.currentTarget.textContent = vv || 'Due'; renderTimeline();
-            insertActivity('step.date','steps',{ id:s.id, due_date: vv });
-          }
-        }).open();
-      });
-
-      // add sub
-      li.querySelector('.add-sub').addEventListener('click', async ()=>{
-        const order = childrenOf(s.id).length;
-        const { data, error } = await supabase.from('steps').insert({
-          project_id: projectId, parent_id: s.id, title: 'New substep', status: 'open', done: false, order_num: order
-        }).select('id').single();
-        if (error){ alert(error.message); return; }
-        await loadSteps(); renderSteps(); renderBoard(); renderTimeline(); renderProjectMeta();
-        insertActivity('step.add','steps',{ id:data.id, parent_id:s.id });
-      });
-
-      // delete with 5s undo
-      li.querySelector('.del').addEventListener('click', async ()=>{
-        const ids = [s.id, ...collectDescendantIds(s.id)];
-        const rows = steps.filter(x=>ids.includes(x.id));
-        undoBin.push({ type:'step', ids, rows });
-        showUndo(`${rows.length} item(s) deleted`, async ()=>{
-          for (const r of rows){ const payload = { ...r }; delete payload.created_at; delete payload.updated_at; await supabase.from('steps').insert(payload); }
-          await loadSteps(); renderSteps(); renderBoard(); renderTimeline(); renderProjectMeta();
-        });
-        setTimeout(async ()=>{
-          const idx = undoBin.findIndex(u=>u.type==='step' && u.ids[0]===ids[0]);
-          if (idx !== -1) {
-            const { error } = await supabase.from('steps').delete().in('id', ids);
-            if (error){ alert(error.message); return; }
-            undoBin.splice(idx,1);
-            await loadSteps(); renderSteps(); renderBoard(); renderProjectMeta();
-            insertActivity('step.delete','steps',{ ids });
-          }
-        }, 5000);
-      });
-
-      container.appendChild(li);
-      branch(s.id, ul);
-    }
-  };
-  branch(null, host);
-
-  if (window.Sortable){
-    new Sortable(host, {
-      animation:150,
-      onEnd: async ()=>{
-        const ids = $$('#stepsTree > li').map(li=>li.dataset.id);
-        for (let i=0;i<ids.length;i++){
-          await supabase.from('steps').update({ order_num: i, parent_id: null, updated_at: nowISO() }).eq('id', ids[i]);
-        }
-        await loadSteps(); renderBoard(); renderTimeline();
-      }
-    });
-  }
-  refreshIcons();
+        <div class="mt-2 flex items-center text-xs text-gray-500 flex-wrap gap-x-3 gap-y-1">
+          <div class="flex items-center">
+            <i data-feather="user" class="w-3 h-3 mr-1"></i>
+            <select class="text-xs border-none bg-transparent focus:outline-none" data-field="assignee">
+              <option ${!step.assigned_to ? 'selected' : ''}>Unassigned</option>
+            </select>
+          </div>
+          <div class="flex items-center">
+            <i data-feather="calendar" class="w-3 h-3 mr-1"></i>
+            <input type="text" data-datepicker class="text-xs border-none bg-transparent focus:outline-none" data-field="due" value="${due}" />
+          </div>
+          <button type="button" class="flex items-center text-gray-500 hover:text-indigo-700 focus:outline-none" data-action="comments">
+            <i data-feather="message-circle" class="w-3 h-3 mr-1"></i><span>Comments</span>
+          </button>
+        </div>
+      </div>
+      <div class="step-actions flex space-x-1 ml-2">
+        <button class="text-gray-400 hover:text-indigo-600" aria-label="Add substep" data-action="add-substep">
+          <i data-feather="plus" class="w-4 h-4"></i>
+        </button>
+        <button class="text-gray-400 hover:text-indigo-600" aria-label="More" data-action="more">
+          <i data-feather="more-vertical" class="w-4 h-4"></i>
+        </button>
+        ${showActions ? `
+        <button class="text-gray-400 hover:text-red-500 ml-1" aria-label="Delete step" data-action="delete-step" title="Delete">
+          <i data-feather="trash-2" class="w-4 h-4"></i>
+        </button>` : ``}
+      </div>
+    </div>
+  </div>`;
 }
-function collectDescendantIds(pid){ const a=[]; (function rec(id){ childrenOf(id).forEach(ch=>{ a.push(ch.id); rec(ch.id); }); })(pid); return a; }
 
-$('#addStepBtn')?.addEventListener('click', async ()=>{
-  const order = childrenOf(null).length;
-  const { data, error } = await supabase.from('steps').insert({
-    project_id: projectId, parent_id: null, title: 'New step', status: 'open', done:false, order_num: order
-  }).select('id').single();
-  if (error){ alert(error.message); return; }
-  await loadSteps(); renderSteps(); renderBoard(); renderTimeline(); renderProjectMeta();
-  insertActivity('step.add','steps',{ id:data.id });
+function renderSteps() {
+  const host = stepsHost(); if (!host) return;
+  if (!host.dataset.cleaned) { host.innerHTML = ''; host.dataset.cleaned = '1'; }
+
+  if (!state.steps.length) {
+    host.innerHTML = '<div class="text-sm text-gray-500 py-2">No steps yet.</div>';
+    return;
+  }
+
+  const sorted = [...state.steps].sort((a, b) =>
+    (a.order_num ?? a.idx ?? 0) - (b.order_num ?? b.idx ?? 0) || new Date(a.created_at) - new Date(b.created_at)
+  );
+
+  host.innerHTML = '';
+  for (const s of sorted) {
+    const div = document.createElement('div');
+    div.innerHTML = stepRowMarkup(s, canWrite(state.role));
+    const node = div.firstElementChild;
+    host.appendChild(node);
+
+    if (canWrite(state.role)) {
+      const delBtn = node.querySelector('[data-action="delete-step"]');
+      if (delBtn) {
+        delBtn.addEventListener('click', async (e) => {
+          e.preventDefault();
+          const id = node.getAttribute('data-id');
+          if (!id) return;
+          if (!confirm('Delete this step?')) return;
+
+          const idx = state.steps.findIndex(x => x.id === id);
+          const backup = idx >= 0 ? state.steps[idx] : null;
+          if (idx >= 0) { state.steps.splice(idx, 1); node.remove(); }
+
+          try {
+            await deleteStep(id);
+            removeIdFromBoard(id);
+            updateBoardCounts();
+            await logActivity(state.id, 'step_deleted', 'steps', { step_id: id });
+          } catch (err) {
+            console.error(err);
+            toast('Delete failed');
+            if (backup) { state.steps.splice(idx, 0, backup); renderSteps(); }
+          }
+        });
+      }
+    }
+  }
+
+  window.feather?.replace();
+
+  if (canWrite(state.role)) {
+    host.querySelectorAll('.step-item').forEach(card => {
+      const id = card.getAttribute('data-id');
+
+      const title = card.querySelector('[data-field="title"]');
+      title?.addEventListener('change', async () => {
+        try { await updateStep(id, { name: title.value.trim() || '(untitled)' }); }
+        catch (e) { console.error(e); toast('Rename failed'); }
+      });
+
+      const statusSel = card.querySelector('[data-field="status"]');
+      statusSel?.addEventListener('change', async () => {
+        const newDb = ui2db[statusSel.value] || 'open';
+        try {
+          await updateStep(id, { status: newDb });
+          const s = state.steps.find(x => x.id === id);
+          if (s) s.status = newDb;
+          moveIdBetweenColumns(id, newDb); // to end of new column
+          renderBoardFromSteps();
+          updateBoardCounts();
+        } catch (e) { console.error(e); toast('Status update failed'); }
+      });
+
+      const due = card.querySelector('[data-field="due"]');
+      if (window.flatpickr && due && !due._fp) window.flatpickr(due, { dateFormat: 'Y-m-d', weekNumbers: true, locale: { firstDayOfWeek: 1 } });
+      due?.addEventListener('change', async () => {
+        try { await updateStep(id, { due_date: due.value || null }); }
+        catch (e) { console.error(e); toast('Date update failed'); }
+      });
+    });
+
+    // Steps list ordering (persists order_num)
+    if (state.sortableSteps) { state.sortableSteps.destroy(); state.sortableSteps = null; }
+    if (window.Sortable) {
+      state.sortableSteps = window.Sortable.create(host, {
+        handle: '.step-item',
+        draggable: '.step-item',
+        direction: 'vertical',
+        animation: 300,
+        swapThreshold: 0.65,
+        invertSwap: true,
+        ghostClass: 'drag-ghost',
+        chosenClass: 'drag-chosen',
+        dragClass: 'sortable-drag',
+        onStart: () => { document.body.classList.add('is-dragging'); host.classList.add('sorting'); },
+        onEnd: async () => {
+          document.body.classList.remove('is-dragging');
+          host.classList.remove('sorting');
+          const cards = Array.from(host.querySelectorAll('.step-item'));
+          const updates = cards.map((el, i) => ({ id: el.getAttribute('data-id'), order_num: i + 1 }));
+          updates.forEach(u => {
+            const s = state.steps.find(x => x.id === u.id);
+            if (s) { s.order_num = u.order_num; s.idx = u.order_num; }
+          });
+          try { await reorderSteps(state.id, updates); toast('Order updated'); }
+          catch (err) { console.error('reorder failed', err); toast('Reorder failed'); await loadSteps(); }
+        }
+      });
+    }
+  }
+}
+
+async function loadSteps() {
+  try {
+    state.steps = await listSteps(state.id);
+    renderSteps();
+  } catch (e) { console.error(e); }
+}
+
+/* ---------- Add Step modal: use your HTML, add DB save ---------- */
+function stepModalEls() {
+  const root = byId('step-modal'); if (!root) return null;
+  const nameI = root.querySelector('input[type="text"]:not([data-datepicker])');
+  const notesI = root.querySelector('textarea');
+  const statusI = root.querySelector('select'); // first select is Status in your modal
+  const dueI = root.querySelector('input[data-datepicker]') || root.querySelector('input[type="date"]');
+  const saveBtn = root.querySelector('.bg-gray-50 button.bg-indigo-600'); // footer Save
+  return { root, nameI, notesI, statusI, dueI, saveBtn };
+}
+function bindStepModalSaveOnce() {
+  const els = stepModalEls(); if (!els) return;
+  if (window.flatpickr && els.dueI && !els.dueI._fp) window.flatpickr(els.dueI, { dateFormat: 'Y-m-d', weekNumbers: true, locale: { firstDayOfWeek: 1 } });
+  const onSave = async (e) => {
+    e.preventDefault();
+    if (!canWrite(state.role)) { toast('You cannot add steps'); return; }
+    if (!els.nameI?.value?.trim()) { toast('Title required'); els.nameI?.focus(); return; }
+    try {
+      const max = state.steps.reduce((m, s) => Math.max(m, (s.order_num ?? s.idx ?? 0)), 0);
+      const payload = {
+        name: els.nameI.value.trim(),
+        notes: els.notesI?.value?.trim() || null,
+        status: ui2db[(els.statusI?.value || 'todo').toLowerCase()] || 'open',
+        due_date: els.dueI?.value || null,
+        order_num: max + 1,
+        idx: max + 1,
+      };
+      const row = await createStep(state.id, payload);
+      state.steps.push(row);
+      moveIdBetweenColumns(row.id, row.status);
+      renderSteps();
+      renderBoardFromSteps();
+      updateBoardCounts();
+      await logActivity(state.id, 'step_created', 'steps', { step_id: row.id });
+      // close via your inline function if present
+      window.closeStepModal?.();
+    } catch (err) { console.error(err); toast('Create failed'); }
+  };
+  els.saveBtn?.addEventListener('click', onSave, { once: true });
+}
+function wrapOpenAddStepModal() {
+  const existing = window.openAddStepModal;
+  window.openAddStepModal = function wrapped() {
+    if (typeof existing === 'function') existing();
+    bindStepModalSaveOnce();
+  };
+}
+window.closeStepModal = window.closeStepModal || (() => {
+  const m = byId('step-modal');
+  if (m) { m.classList.add('hidden'); document.documentElement.classList.remove('overflow-hidden'); }
 });
 
-// ---------- Board ----------
-function renderBoard(){
-  const host = $('#boardColumns'); if (!host) return;
-  host.innerHTML = '';
-  const cols=[
-    { key:'open', title:'To Do' },
-    { key:'in_progress', title:'In Progress' },
-    { key:'review', title:'In Review' },
-    { key:'done', title:'Done' }
-  ];
-  for (const c of cols){
-    const col = document.createElement('div');
-    col.className='rounded-xl bg-gray-50 border border-gray-200 p-2 flex flex-col min-h-[16rem]';
-    col.dataset.col=c.key;
-    col.innerHTML=`<header class="text-xs font-semibold px-1 py-1">${c.title}</header><div class="flex-1 space-y-2" data-zone></div>`;
-    host.appendChild(col);
-  }
-  steps.filter(s=>s.parent_id===null).forEach(s=>{
-    const zone = host.querySelector(`[data-col="${s.status||'open'}"] [data-zone]`) || host.querySelector('[data-col="open"] [data-zone]');
-    const card = document.createElement('div');
-    card.className='rounded-lg bg-white shadow p-2 text-sm border cursor-move';
-    card.draggable=true; card.dataset.id=s.id;
-    card.innerHTML=`<div class="flex items-center justify-between gap-2">
-      <span class="${s.done?'line-through text-gray-400':''}">${s.title}</span>
-      <span class="text-[10px] px-1.5 py-0.5 rounded border bg-gray-50">${statusTokenToLabel(s.status)}</span>
-    </div>`;
-    zone?.appendChild(card);
-    card.addEventListener('dragstart', ev=>{ ev.dataTransfer.setData('text/plain', s.id); ev.dataTransfer.effectAllowed='move'; });
+/* ---------- Settings modal (force-wire) ---------- */
+function wireSettingsModal() {
+  const btn = byId('settings-open');
+  const modal = byId('settings-modal');
+  const frame = byId('settings-frame');
+  if (!btn || !modal || !frame) return;
+  if (btn.dataset.bound === '1') return;
+  btn.dataset.bound = '1';
+  btn.addEventListener('click', (e) => {
+    e.preventDefault(); e.stopPropagation();
+    frame.src = `/projects/settings.html?id=${encodeURIComponent(state.id)}`;
+    document.documentElement.classList.add('overflow-hidden');
+    modal.classList.remove('hidden');
   });
-  $$('#boardColumns [data-zone]').forEach(zone=>{
-    zone.addEventListener('dragover', e=>e.preventDefault());
-    zone.addEventListener('drop', async (e)=>{
-      e.preventDefault();
-      const id = e.dataTransfer.getData('text/plain');
-      const s = steps.find(x=>x.id===id); if (!s) return;
-      const col = e.currentTarget.closest('[data-col]').dataset.col;
-      if (s.status===col) return;
-      const { error } = await supabase.from('steps').update({ status: col, updated_at: nowISO() }).eq('id', id);
-      if (error){ alert(error.message); return; }
-      s.status = col; renderBoard();
-      insertActivity('step.move','steps',{ id, status: col });
-    });
+  window.closeSettingsModal = () => { document.documentElement.classList.remove('overflow-hidden'); modal.classList.add('hidden'); };
+}
+/* ---------- Chat modal (force-wire) ---------- */
+function wireChatModal() {
+  const btn = byId('chat-open');
+  const modal = byId('chat-modal');
+  const frame = byId('chat-frame');
+  if (!btn || !modal || !frame) return;
+  if (btn.dataset.bound === '1') return;
+  btn.dataset.bound = '1';
+  btn.addEventListener('click', (e) => {
+    e.preventDefault(); e.stopPropagation();
+    frame.src = `/projects/chat.html?id=${encodeURIComponent(state.id)}`;
+    document.documentElement.classList.add('overflow-hidden');
+    modal.classList.remove('hidden');
   });
+  window.closeChatModal = () => { document.documentElement.classList.remove('overflow-hidden'); modal.classList.add('hidden'); };
 }
 
-// ---------- Timeline ----------
-function renderTimeline(){
-  const wrap = $('#timelineCanvas'); if (!wrap) return;
-  wrap.innerHTML=''; const tops = steps.filter(s=>s.parent_id===null);
-  const box=document.createElement('div'); box.className='relative h-[200px]';
-  tops.forEach((s,i)=>{
-    const bar=document.createElement('div');
-    bar.className='absolute left-0 right-10 h-6 rounded bg-gray-200 border';
-    bar.style.top=`${10 + i*28}px`;
-    const d = s.due_date ? new Date(s.due_date) : null;
-    const day = d ? ((d.getDay() || 7)) : 7; // 1..7
-    bar.style.marginLeft=`calc(${((day-1)/6)*100}% - 0px)`; bar.style.width='30%';
-    bar.title=`${s.title}${s.due_date?` • ${s.due_date}`:''}`;
-    box.appendChild(bar);
+/* ---------- Timeline ---------- */
+function wireTimelineTab() {
+  const btn = document.querySelector('.tab-button[data-tab="timeline"]');
+  if (!btn || btn.dataset.boundTimeline === '1') return;
+  btn.dataset.boundTimeline = '1';
+  btn.addEventListener('click', () => renderTimelineFromSteps());
+}
+function renderTimelineFromSteps() {
+  const host = byId('timeline-content'); if (!host) return;
+  const mountId = 'timeline-mount';
+  let mount = byId(mountId);
+  if (!mount) { mount = document.createElement('div'); mount.id = mountId; host.appendChild(mount); }
+  while (mount.firstChild) mount.removeChild(mount.firstChild);
+
+  const rows = (state?.steps || []).filter(s => s.due_date).slice()
+    .sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
+
+  if (rows.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'text-sm text-gray-500';
+    empty.textContent = 'No dated steps yet.';
+    mount.appendChild(empty);
+    return;
+  }
+
+  const ul = document.createElement('ul');
+  ul.className = 'space-y-2';
+  for (const s of rows) {
+    const li = document.createElement('li');
+    li.className = 'flex items-start justify-between rounded-lg border border-gray-200 bg-white px-3 py-2';
+    li.innerHTML = `
+      <div class="min-w-0">
+        <p class="text-sm font-medium text-gray-900 truncate">${escapeHtml(s.name || 'Untitled')}</p>
+        <p class="text-xs text-gray-500">${s.status?.replace('_', ' ') || ''}</p>
+      </div>
+      <div class="text-sm text-gray-700 ml-3 whitespace-nowrap">${s.due_date}</div>
+    `;
+    ul.appendChild(li);
+  }
+  mount.appendChild(ul);
+  try { window.feather?.replace(); } catch { }
+}
+
+/* ---------- Activity (DB only) ---------- */
+function wireActivityTab() {
+  const btn = document.querySelector('.tab-button[data-tab="activity"]');
+  if (!btn || btn.dataset.boundActivity === '1') return;
+  btn.dataset.boundActivity = '1';
+
+  let badge = btn.querySelector('#activity-badge');
+  if (!badge) {
+    badge = document.createElement('span');
+    badge.id = 'activity-badge';
+    badge.className = 'ml-2 inline-flex items-center justify-center rounded-full bg-indigo-600 text-white text-xs px-2 py-0.5 hidden';
+    badge.textContent = '0';
+    btn.appendChild(badge);
+  }
+  btn.addEventListener('click', () => renderActivity(true));
+}
+function startActivityRealtime() {
+  const btn = document.querySelector('.tab-button[data-tab="activity"]');
+  const badge = btn?.querySelector('#activity-badge');
+  if (!subscribeActivities || !badge) return;
+  const isActiveTab = () => !byId('activity-content')?.classList.contains('hidden');
+  if (window.__unsubActivities) { try { window.__unsubActivities(); } catch { } }
+  window.__unsubActivities = subscribeActivities(state.id, () => {
+    if (isActiveTab()) return;
+    const n = Number(badge.textContent || '0') + 1;
+    badge.textContent = String(n);
+    badge.classList.remove('hidden');
   });
-  wrap.appendChild(box);
 }
-
-// ---------- Files ----------
-async function loadFiles(){
-  const { data, error } = await supabase
-    .from('files')
-    .select('id,project_id,name,mime,size,path,uploaded_by,created_at')
-    .eq('project_id', projectId)
-    .order('created_at',{ ascending:false })
-    .limit(50);
-  if (error){ files=[]; return; }
-  files = data || [];
+function timeAgo(ts) {
+  const d = (Date.now() - new Date(ts).getTime()) / 1000;
+  if (d < 60) return `${Math.floor(d)}s ago`;
+  if (d < 3600) return `${Math.floor(d / 60)}m ago`;
+  if (d < 86400) return `${Math.floor(d / 3600)}h ago`;
+  return `${Math.floor(d / 86400)}d ago`;
 }
-async function renderFiles(){
-  const list = $('#fileList'); if (!list) return;
-  const tpl = $('#file-item-tpl'); list.innerHTML='';
-  for (const f of files){
-    const node = tpl ? tpl.content.cloneNode(true) : document.createElement('li');
-    if (!tpl) node.className='p-3 flex items-center gap-3';
-    const a = tpl ? node.querySelector('[data-prop="name"]') : document.createElement('a');
-    if (!tpl){ a.className='text-sm text-indigo-700 hover:text-indigo-900'; node.appendChild(a); }
-    a.textContent = f.name; a.href = await signedFrom('project-files', f.path) || '#'; a.target='_blank'; a.rel='noopener';
-    const sizeEl = tpl ? node.querySelector('[data-prop="size"]') : document.createElement('span');
-    if (!tpl){ sizeEl.className='text-xs text-gray-500'; node.appendChild(sizeEl); }
-    sizeEl.textContent = humanSize(f.size);
-    const byEl = tpl ? node.querySelector('[data-prop="by"]') : document.createElement('span');
-    if (!tpl){ byEl.className='text-xs text-gray-500 ml-auto'; node.appendChild(byEl); }
-    try {
-      const { data: p } = await supabase.from('profiles').select('display_name,email').eq('id', f.uploaded_by).maybeSingle();
-      byEl.textContent = p ? `by ${p.display_name || p.email || ''}` : '';
-    } catch {}
-    list.appendChild(node);
+function buildActivityLine(kind, meta, stepTitle) {
+  switch (kind) {
+    case 'step_created': return `Step created: ${escapeHtml(stepTitle || meta?.step_name || '')}`;
+    case 'step_updated': return `Step updated: ${escapeHtml(stepTitle || meta?.step_name || '')}`;
+    case 'step_deleted': return `Step deleted`;
+    case 'file_uploaded': return `File uploaded: ${escapeHtml(meta?.name || '')}`;
+    case 'member_invited': return `Member invited: ${escapeHtml(meta?.email || '')}`;
+    default: return escapeHtml(kind || 'event');
   }
-  refreshIcons();
 }
-$('#file-browse')?.addEventListener('click', ()=> $('#file-input')?.click());
-$('#file-input')?.addEventListener('change', (e)=> handleFiles([...e.target.files||[]]));
-const drop = $('#dropzone');
-if (drop) {
-  ['dragover','dragenter'].forEach(ev=>drop.addEventListener(ev, e=>{ e.preventDefault(); drop.classList.add('active'); }));
-  ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev, e=>{ e.preventDefault(); drop.classList.remove('active'); }));
-  drop.addEventListener('drop', (e)=> handleFiles([...e.dataTransfer.files||[]]));
+function safeJson(x) { try { return typeof x === 'string' ? JSON.parse(x) : x; } catch { return {}; } }
+async function resolveAvatarUrl(avatarPath, userId) {
+  if (!avatarPath) return `https://i.pravatar.cc/64?u=${encodeURIComponent(userId || '0')}`;
+  try { return (await getSignedFileURL('avatars', avatarPath, 3600)) || `https://i.pravatar.cc/64?u=${encodeURIComponent(userId || '0')}`; }
+  catch { return `https://i.pravatar.cc/64?u=${encodeURIComponent(userId || '0')}`; }
 }
-async function handleFiles(list){
-  if (!list.length) return;
-  for (const f of list){
-    const path = `${projectId}/${Date.now()}_${f.name.replace(/[^\w.\- ]+/g,'_')}`;
-    const up = await supabase.storage.from('project-files').upload(path, f, { upsert:false });
-    if (up.error){ alert(up.error.message); continue; }
-    const row = { project_id: projectId, name:f.name, mime:f.type||'application/octet-stream', size:f.size, path, uploaded_by: me.id };
-    const { error } = await supabase.from('files').insert(row);
-    if (error) alert(error.message); else insertActivity('file.add','files',{ name:f.name, size:f.size });
-  }
-  await loadFiles(); renderFiles();
-}
+async function renderActivity(openedByUser = false) {
+  const host = byId('activity-content'); if (!host || !state?.id) return;
 
-// ---------- Activity ----------
-async function loadActivities(){
-  const list = $('#activityFeed'); if (!list) return;
-  const { data, error } = await supabase
-    .from('activities')
-    .select('id,actor_id,kind,ref_table,meta,created_at,profiles:profiles!activities_actor_id_fkey(display_name,avatar_path)')
-    .eq('project_id', projectId)
-    .order('created_at',{ ascending:false })
-    .limit(20);
-  if (error) return;
-  list.innerHTML='';
-  const tpl = $('#activity-item-tpl');
-  for (const r of (data||[])) {
-    const node = tpl ? tpl.content.cloneNode(true) : document.createElement('li');
-    if (!tpl) node.className='p-3 flex items-start gap-3';
-    const line = tpl ? node.querySelector('[data-prop="line"]') : (()=>{ const p=document.createElement('p'); p.className='text-sm'; node.appendChild(p); return p; })();
-    const when = tpl ? node.querySelector('[data-prop="when"]') : (()=>{ const p=document.createElement('p'); p.className='text-xs text-gray-400'; node.appendChild(p); return p; })();
-    const avatar = tpl ? node.querySelector('[data-prop="avatar"]') : null;
-    line.textContent = r.kind || 'activity';
-    when.textContent = new Date(r.created_at).toLocaleString();
-    if (avatar){
-      if (r.profiles?.avatar_path){
-        const url = await signedFrom('avatars', r.profiles.avatar_path);
-        if (url) avatar.src = url;
-      } else avatar.src = 'https://i.pravatar.cc/64?img=2';
+  let rows = []; try { rows = await listActivities(state.id, 100); } catch { rows = []; }
+
+  const actorIds = Array.from(new Set(rows.map(r => r.actor_id).filter(Boolean)));
+  const stepIds = Array.from(new Set(rows.map(r => safeJson(r.meta)?.step_id).filter(Boolean)));
+  const profiles = await (async () => { try { return await fetchProfilesMap(actorIds); } catch { return new Map(); } })();
+  const stepsMap = await (async () => { try { return await fetchStepsMap(stepIds); } catch { return new Map(); } })();
+
+  // hide static demo items from HTML
+  const demoWrap = host.querySelector('.space-y-4');
+  demoWrap?.classList.add('hidden');
+
+  let mount = byId('activity-live');
+  if (!mount) { mount = document.createElement('div'); mount.id = 'activity-live'; host.appendChild(mount); }
+  while (mount.firstChild) mount.removeChild(mount.firstChild);
+
+  const badge = document.querySelector('.tab-button[data-tab="activity"] #activity-badge');
+  const key = `activity:lastSeen:${state.id}`;
+  const lastSeen = Number(localStorage.getItem(key) || '0');
+  let unseen = 0;
+  const newestTs = rows[0]?.created_at ? new Date(rows[0].created_at).getTime() : 0;
+
+  if (rows.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'text-sm text-gray-500';
+    empty.textContent = 'No activity yet.';
+    mount.appendChild(empty);
+  } else {
+    const ul = document.createElement('ul');
+    ul.className = 'divide-y divide-gray-200 bg-white rounded-lg border border-gray-200';
+    for (const a of rows) {
+      const meta = safeJson(a.meta);
+      const prof = profiles.get(a.actor_id) || { name: 'User', avatar: '' };
+      const stepTitle = meta?.step_id ? (stepsMap.get(meta.step_id) || '') : (meta?.step_name || '');
+      if (new Date(a.created_at).getTime() > lastSeen) unseen++;
+
+      const li = document.createElement('li');
+      li.className = 'p-3';
+      li.setAttribute('data-activity-id', a.id);
+      const when = timeAgo(a.created_at);
+      const avatarUrl = await resolveAvatarUrl(prof.avatar, a.actor_id);
+
+      li.innerHTML = `
+        <div class="flex items-start gap-3">
+          <img class="h-8 w-8 rounded-full object-cover bg-gray-100" src="${avatarUrl}" alt="">
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center justify-between">
+              <p class="text-sm font-medium text-gray-900 truncate">${escapeHtml(prof.name)}</p>
+              <span class="text-xs text-gray-500 whitespace-nowrap">${when}</span>
+            </div>
+            <p class="text-sm text-gray-900 mt-0.5">${buildActivityLine(a.kind, meta, stepTitle)}</p>
+          </div>
+        </div>`;
+      ul.appendChild(li);
     }
-    list.appendChild(node);
+    mount.appendChild(ul);
+  }
+
+  if (badge) {
+    if (openedByUser) {
+      badge.classList.add('hidden');
+      badge.textContent = '0';
+      if (newestTs) localStorage.setItem(key, String(newestTs));
+    } else {
+      if (unseen > 0) { badge.textContent = String(unseen); badge.classList.remove('hidden'); }
+      else { badge.classList.add('hidden'); }
+    }
   }
 }
-async function insertActivity(kind, ref_table, meta){
-  await supabase.from('activities').insert({ project_id: projectId, actor_id: me.id, kind, ref_table, meta });
-  loadActivities();
+
+/* ---------- Board ---------- */
+function wireBoardTab() {
+  const btn = document.querySelector('.tab-button[data-tab="board"]');
+  if (!btn || btn.dataset.boundBoard === '1') return;
+  btn.dataset.boundBoard = '1';
+  btn.addEventListener('click', () => { try { renderBoardFromSteps(); updateBoardCounts(); } catch { } });
 }
 
-// ---------- Realtime ----------
-supabase
-  .channel(`steps-${projectId}`)
-  .on('postgres_changes',{ event:'*', schema:'public', table:'steps', filter:`project_id=eq.${projectId}` }, async ()=>{
-    await loadSteps(); renderSteps(); renderBoard(); renderTimeline(); renderProjectMeta();
-  })
-  .subscribe();
+function initBoardOrderFromSteps() {
+  const buckets = groupByStatus();
+  state.boardOrder.backlog = buckets.backlog.map(s => s.id);
+  state.boardOrder.inprogress = buckets.inprogress.map(s => s.id);
+  state.boardOrder.review = buckets.review.map(s => s.id);
+  state.boardOrder.done = buckets.done.map(s => s.id);
+}
 
-// ---------- Undo banner ----------
-function showUndo(text, onUndo){
-  let el = document.getElementById('undo-bar');
-  if (!el){
-    el = document.createElement('div');
-    el.id='undo-bar';
-    el.className='fixed bottom-4 left-1/2 -translate-x-1/2 bg-white border shadow-lg rounded-lg px-4 py-2 flex items-center gap-3 z-50';
-    document.body.appendChild(el);
+function groupByStatus() {
+  const bucket = { backlog: [], inprogress: [], review: [], done: [] };
+  for (const s of state.steps) {
+    const ui = ({ open: 'backlog', in_progress: 'inprogress', review: 'review', done: 'done' }[String(s.status).toLowerCase()] || 'backlog');
+    bucket[ui].push(s);
   }
-  el.innerHTML = `<span class="text-sm">${text}</span><button id="undo-btn" class="text-sm text-indigo-700 hover:text-indigo-900 underline">Undo</button>`;
-  $('#undo-btn', el)?.addEventListener('click', async ()=>{
-    undoBin.pop();
-    if (typeof onUndo==='function') await onUndo();
-    el.remove();
+  Object.values(bucket).forEach(list => list.sort((a, b) => (a.order_num ?? 0) - (b.order_num ?? 0)));
+  return bucket;
+}
+
+function ensureSentinel(host) {
+  // A non-draggable item at the end to allow dropping into empty space -> last position.
+  if (!host) return;
+  if (!host.querySelector('.board-sentinel')) {
+    const s = document.createElement('div');
+    s.className = 'board-sentinel h-1'; // tiny height; not draggable
+    host.appendChild(s);
+  }
+}
+
+function renderBoardFromSteps() {
+  const cols = {
+    backlog: byId('backlog-column'),
+    inprogress: byId('inprogress-column'),
+    review: byId('review-column'),
+    done: byId('done-column')
+  };
+
+  const buckets = groupByStatus();
+
+  // sanitize local order against current items and append missing to tail
+  for (const key of Object.keys(state.boardOrder)) {
+    const present = new Set(buckets[key].map(s => s.id));
+    state.boardOrder[key] = state.boardOrder[key].filter(id => present.has(id));
+    for (const s of buckets[key]) if (!state.boardOrder[key].includes(s.id)) state.boardOrder[key].push(s.id);
+  }
+
+  for (const [key, host] of Object.entries(cols)) {
+    if (!host) continue;
+    if (!host.dataset.cleaned) { host.innerHTML = ''; host.dataset.cleaned = '1'; }
+    host.innerHTML = '';
+
+    const map = new Map(buckets[key].map(s => [s.id, s]));
+    for (const id of state.boardOrder[key]) {
+      const row = map.get(id); if (!row) continue;
+      const div = document.createElement('div');
+      div.className = 'step-card bg-white p-3 rounded-lg shadow-sm border border-gray-200 step-item';
+      div.setAttribute('data-id', row.id);
+      div.innerHTML = `
+        <p class="text-sm font-medium ${row.status === 'done' ? 'line-through' : ''}">${escapeHtml(row.name || 'Untitled')}</p>
+        <div class="mt-2 flex items-center justify-between">
+          <span class="text-xs text-gray-500">${row.due_date ? 'Due ' + row.due_date : ''}</span>
+          <i data-feather="hash" class="w-4 h-4 text-gray-300"></i>
+        </div>`;
+      host.appendChild(div);
+    }
+
+    // allow “drop to whitespace to land last”
+    ensureSentinel(host);
+
+    // Rename "Backlog" header to "To Do"
+    if (key === 'backlog') {
+      const wrapper = host.closest('.bg-gray-50.rounded-lg.p-3');
+      const h5 = wrapper?.querySelector('h5');
+      if (h5 && h5.textContent.trim() !== 'To Do') h5.textContent = 'To Do';
+    }
+  }
+
+  try { window.feather?.replace(); } catch { }
+  initBoardDnD(cols);
+  updateBoardCounts();
+}
+
+function updateBoardCounts() {
+  const buckets = groupByStatus();
+  const map = {
+    backlog: byId('backlog-column'),
+    inprogress: byId('inprogress-column'),
+    review: byId('review-column'),
+    done: byId('done-column')
+  };
+  for (const [key, host] of Object.entries(map)) {
+    if (!host) continue;
+    const wrapper = host.closest('.bg-gray-50.rounded-lg.p-3');
+    const countSpan = wrapper?.querySelector('.flex.justify-between span');
+    if (countSpan) countSpan.textContent = String(buckets[key].length);
+  }
+}
+
+function removeIdFromBoard(id) {
+  for (const k of Object.keys(state.boardOrder)) {
+    state.boardOrder[k] = state.boardOrder[k].filter(x => x !== id);
+  }
+}
+function moveIdBetweenColumns(id, newDbStatus) {
+  const key = ({ open: 'backlog', in_progress: 'inprogress', review: 'review', done: 'done' }[String(newDbStatus).toLowerCase()] || 'backlog');
+  removeIdFromBoard(id);
+  state.boardOrder[key].push(id); // to end
+}
+
+function boardKeyFromContainer(el) {
+  const id = el?.id || '';
+  if (id.startsWith('inprogress')) return 'inprogress';
+  if (id.startsWith('review')) return 'review';
+  if (id.startsWith('done')) return 'done';
+  return 'backlog';
+}
+
+function syncBoardOrderFromDOM(cols) {
+  for (const [key, host] of Object.entries(cols)) {
+    if (!host) continue;
+    state.boardOrder[key] = Array.from(host.querySelectorAll('.step-item')).map(n => n.getAttribute('data-id'));
+  }
+}
+
+function initBoardDnD(cols) {
+  if (!window.Sortable) return;
+
+  const opts = {
+    group: { name: 'board', pull: true, put: true },
+    sort: true,
+    animation: 200,
+    delay: 0,
+    fallbackOnBody: true,
+    forceFallback: false,
+    emptyInsertThreshold: 24, // easier to drop into empty space
+    swapThreshold: 0.5,
+    ghostClass: 'opacity-50',
+    draggable: '.step-item',           // sentinel not draggable
+    filter: '.board-sentinel',         // ignore sentinel
+    onAdd: async (evt) => {
+      const el = evt.item;
+      const id = el.getAttribute('data-id');
+      const toKey = boardKeyFromContainer(evt.to);
+      try {
+        const db = ({ backlog: 'open', inprogress: 'in_progress', review: 'review', done: 'done' }[toKey]) || 'open';
+        await updateStep(id, { status: db });      // status only; no order_num change
+        const s = state.steps.find(x => x.id === id); if (s) s.status = db;
+        syncBoardOrderFromDOM(cols);               // record new local column order (including end position)
+        // repaint to avoid any stuck drag ghost or need to re-grab
+        renderBoardFromSteps();
+        updateBoardCounts();
+      } catch (e) { console.error(e); }
+    },
+    onUpdate: () => { syncBoardOrderFromDOM(cols); }, // same-column reorder (local only)
+    onEnd: () => { syncBoardOrderFromDOM(cols); updateBoardCounts(); }
+  };
+
+  for (const host of Object.values(cols)) {
+    if (!host) continue;
+    // rebind every render for stability (remove old Sortable if present)
+    if (host.__sortable) { try { host.__sortable.destroy(); } catch {} host.__sortable = null; }
+    ensureSentinel(host);
+    host.__sortable = new Sortable(host, opts);
+  }
+}
+
+/* ---------- Realtime ---------- */
+function mountRealtime() {
+  if (state.unsub) state.unsub();
+  let t = null;
+  state.unsub = subscribeSteps(state.id, (payload) => {
+    const { eventType, new: n, old: o } = payload;
+
+    if (eventType === 'INSERT') {
+      if (!state.steps.some(s => s.id === n.id)) {
+        state.steps.push(n);
+        moveIdBetweenColumns(n.id, n.status);
+        renderSteps();
+        renderBoardFromSteps();
+        updateBoardCounts();
+      }
+    } else if (eventType === 'UPDATE') {
+      const i = state.steps.findIndex(s => s.id === n.id);
+      if (i >= 0) {
+        state.steps[i] = { ...state.steps[i], ...n };
+        if (n?.status) moveIdBetweenColumns(n.id, n.status);
+      }
+      clearTimeout(t);
+      t = setTimeout(() => {
+        if (!document.body.classList.contains('is-dragging')) {
+          renderSteps();
+          renderBoardFromSteps();
+          updateBoardCounts();
+        }
+      }, 160);
+    } else if (eventType === 'DELETE') {
+      const i = state.steps.findIndex(s => s.id === o.id);
+      if (i >= 0) { state.steps.splice(i, 1); removeIdFromBoard(o.id); }
+      renderSteps();
+      renderBoardFromSteps();
+      updateBoardCounts();
+    }
   });
-  setTimeout(()=>{ if (document.body.contains(el)) el.remove(); }, 5200);
+  window.addEventListener('beforeunload', () => { try { state.unsub?.(); } catch { } });
 }
+
+/* ---------- Invite token accept ---------- */
+(function acceptInviteIfPresent() {
+  const u = new URL(location.href);
+  const token = u.searchParams.get('invite');
+  const id = u.searchParams.get('id');
+  if (!token || !id) return;
+  import('./api.js').then(({ acceptInvite }) => { acceptInvite(id, token).catch(() => { }); });
+})();

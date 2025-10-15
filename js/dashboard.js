@@ -1,9 +1,10 @@
+// C:\steptags2\js\dashboard.js
 // Dashboard: RLS-driven list + robust card navigation (no UI changes)
 import { supabase } from './supabase.js';
 
-const $  = (s, el = document) => el.querySelector(s);
+const $ = (s, el = document) => el.querySelector(s);
 const listEl = $('#projects-list');
-const tpl    = $('#project-card-tpl');
+const tpl = $('#project-card-tpl');
 
 function clear(el) { if (!el) return; while (el.firstChild) el.removeChild(el.firstChild); }
 
@@ -28,23 +29,37 @@ function renderProjects(rows) {
   for (const p of rows) {
     const node = tpl.content.firstElementChild.cloneNode(true);
 
-    // Fill basic fields
+    // Optional “Manage Team” trigger: if a global opener exists, use it; else let anchor navigate.
+    const manage = node.querySelector('[data-prop="manageTeam"]');
+    if (manage) {
+      manage.href = `/projects/project.html?id=${encodeURIComponent(p.id)}`;
+      manage.addEventListener('click', (e) => {
+        const opener = window.__openTeamModal;
+        if (typeof opener === 'function') {
+          e.preventDefault();
+          opener(p.title ?? 'Project');
+        }
+        // else default navigation
+      });
+    }
+
+    // Fill fields
     const tEl = node.querySelector('[data-prop="title"]');
     if (tEl) tEl.textContent = p.title || 'Untitled project';
     const dEl = node.querySelector('[data-prop="description"]');
     if (dEl) dEl.textContent = p.description || '';
 
-    // URL for this project
+    // Canonical URL
     const url = `/projects/project.html?id=${encodeURIComponent(p.id)}`;
 
-    // Prefer an existing anchor in the template
+    // Prefer existing anchor in template
     const a = node.querySelector('a[href]');
     if (a) a.href = url;
 
-    // Mark card for delegated navigation (no visual change)
+    // Mark card for delegated navigation
     node.dataset.projectId = p.id;
 
-    // Keep keyboard accessible without altering styles
+    // Keyboard access without style change
     if (!node.hasAttribute('tabindex')) node.setAttribute('tabindex', '0');
     if (!node.hasAttribute('role')) node.setAttribute('role', 'link');
 
@@ -94,7 +109,7 @@ listEl.addEventListener('click', (e) => {
   const card = e.target.closest('[data-project-id]');
   if (!card) return;
 
-  // If user actually clicked an <a>, let browser handle it
+  // If user clicked an <a>, let browser handle it
   const anchor = e.target.closest('a[href]');
   if (anchor && anchor.href) return;
 
