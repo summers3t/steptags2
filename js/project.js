@@ -23,7 +23,10 @@ const state = {
   unsub: null,
   sortableSteps: null,
   boardOrder: { backlog: [], inprogress: [], review: [], done: [] },
+  pendingDelete: null, // { id, restore, finalizeNow() }
 };
+
+
 
 function pid() {
   const u = new URL(location.href);
@@ -35,6 +38,42 @@ function toast(msg) {
   t.textContent = msg;
   document.body.appendChild(t);
   setTimeout(() => t.remove(), 2000);
+}
+
+/* Snackbar with countdown + Undo. Single instance. */
+function showUndoSnackbar({ text = 'Deleted', seconds = 5, onUndo, onElapsed }) {
+  // remove previous
+  document.getElementById('undo-snackbar')?.remove();
+
+  const bar = document.createElement('div');
+  bar.id = 'undo-snackbar';
+  bar.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] bg-gray-900 text-white text-sm rounded-md shadow-lg px-3 py-2 flex items-center gap-3';
+  const msg = document.createElement('span'); msg.textContent = text;
+  const btn = document.createElement('button'); btn.className = 'underline underline-offset-2';
+  let remaining = seconds; btn.textContent = `Undo (${remaining})`;
+
+  bar.append(msg, btn);
+  document.body.appendChild(bar);
+
+  const cleanup = () => { try { bar.remove(); } catch { } };
+  const tick = setInterval(() => {
+    remaining -= 1;
+    if (remaining <= 0) {
+      clearInterval(tick);
+      cleanup();
+      try { onElapsed?.(); } catch { }
+    } else {
+      btn.textContent = `Undo (${remaining})`;
+    }
+  }, 1000);
+
+  btn.addEventListener('click', () => {
+    clearInterval(tick);
+    cleanup();
+    try { onUndo?.(); } catch { }
+  });
+
+  return { dismiss() { clearInterval(tick); cleanup(); } };
 }
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m])); }
 
@@ -173,28 +212,77 @@ function renderSteps() {
     if (canWrite(state.role)) {
       const delBtn = node.querySelector('[data-action="delete-step"]');
       if (delBtn) {
-        delBtn.addEventListener('click', async (e) => {
+        delBtn.addEventListener('click', (e) => {
           e.preventDefault();
           const id = node.getAttribute('data-id');
           if (!id) return;
-          if (!confirm('Delete this step?')) return;
 
+          // finalize any previous pending delete immediately
+          try { state.pendingDelete?.finalizeNow?.(); } catch { }
+
+          // capture backup to allow local restore
           const idx = state.steps.findIndex(x => x.id === id);
           const backup = idx >= 0 ? state.steps[idx] : null;
-          if (idx >= 0) { state.steps.splice(idx, 1); node.remove(); }
 
-          try {
-            await deleteStep(id);
-            removeIdFromBoard(id);
-            updateBoardCounts();
-            await logActivity(state.id, 'step_deleted', 'steps', { step_id: id });
-          } catch (err) {
-            console.error(err);
-            toast('Delete failed');
-            if (backup) { state.steps.splice(idx, 0, backup); renderSteps(); }
-          }
+          // optimistic local remove
+          if (idx >= 0) state.steps.splice(idx, 1);
+          node.remove();
+          removeIdFromBoard(id);
+          renderSteps();
+          renderBoardFromSteps();
+          updateBoardCounts();
+
+          // show undo bar and delay server delete
+          const bar = showUndoSnackbar({
+            text: 'Step deleted',
+            seconds: 5,
+            onUndo: () => {
+              state.pendingDelete = null;
+              if (!backup) return;
+              // restore locally
+              state.steps.push(backup);                // order_num preserved from backup
+              moveIdBetweenColumns(backup.id, backup.status); // to end of its column (safe and simple)
+              renderSteps();
+              renderBoardFromSteps();
+              updateBoardCounts();
+            },
+            onElapsed: async () => {
+              try {
+                await deleteStep(id);
+                await logActivity(state.id, 'step_deleted', 'steps', { step_id: id });
+              } catch (err) {
+                // if server delete fails, restore locally as fallback
+                console.error(err);
+                toast('Delete failed');
+                if (backup && !state.steps.find(s => s.id === backup.id)) {
+                  state.steps.push(backup);
+                  moveIdBetweenColumns(backup.id, backup.status);
+                  renderSteps();
+                  renderBoardFromSteps();
+                  updateBoardCounts();
+                }
+              } finally {
+                state.pendingDelete = null;
+              }
+            }
+          });
+
+          // allow programmatic finalize (e.g., user deletes another step before timeout)
+          state.pendingDelete = {
+            id,
+            restore: backup,
+            async finalizeNow() {
+              try { bar.dismiss(); } catch { }
+              try {
+                await deleteStep(id);
+                await logActivity(state.id, 'step_deleted', 'steps', { step_id: id });
+              } catch { /* ignore */ }
+              state.pendingDelete = null;
+            }
+          };
         });
       }
+
     }
   }
 
@@ -688,7 +776,7 @@ function initBoardDnD(cols) {
   for (const host of Object.values(cols)) {
     if (!host) continue;
     // rebind every render for stability (remove old Sortable if present)
-    if (host.__sortable) { try { host.__sortable.destroy(); } catch {} host.__sortable = null; }
+    if (host.__sortable) { try { host.__sortable.destroy(); } catch { } host.__sortable = null; }
     ensureSentinel(host);
     host.__sortable = new Sortable(host, opts);
   }
