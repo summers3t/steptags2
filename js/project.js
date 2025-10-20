@@ -1,5 +1,6 @@
 // C:\steptags2\js\project.js
-// Wire project page to real data using existing DOM (no HTML edits).
+// Keep original UI. Add hierarchical substeps + nested DnD. Zero flicker.
+
 import { supabase } from './supabase.js';
 import {
   getProject, getMembership, canWrite,
@@ -11,7 +12,7 @@ import {
 
 const $ = (s, el = document) => el.querySelector(s);
 const byId = (id) => document.getElementById(id);
-
+const ESC = (s) => String(s ?? '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
 const ui2db = { todo: 'open', inprogress: 'in_progress', review: 'review', done: 'done' };
 const db2ui = (s) => ({ open: 'todo', in_progress: 'inprogress', review: 'review', done: 'done' }[(s || '').toLowerCase()] || 'todo');
 
@@ -19,14 +20,16 @@ const state = {
   id: null,
   role: 'viewer',
   project: null,
-  steps: [],
-  unsub: null,
-  sortableSteps: null,
+  steps: [],     // flat rows
+  tree: null,    // built hierarchy
+  unsubSteps: null,
+  nestedSortables: new Set(),
   boardOrder: { backlog: [], inprogress: [], review: [], done: [] },
-  pendingDelete: null, // { id, restore, finalizeNow() }
+  pendingDelete: null
 };
 
-
+/* ================= Boot ================= */
+document.addEventListener('DOMContentLoaded', boot);
 
 function pid() {
   const u = new URL(location.href);
@@ -37,47 +40,8 @@ function toast(msg) {
   t.className = 'fixed bottom-4 right-4 px-3 py-2 bg-indigo-100 text-indigo-800 rounded-md shadow z-50';
   t.textContent = msg;
   document.body.appendChild(t);
-  setTimeout(() => t.remove(), 2000);
+  setTimeout(() => t.remove(), 1800);
 }
-
-/* Snackbar with countdown + Undo. Single instance. */
-function showUndoSnackbar({ text = 'Deleted', seconds = 5, onUndo, onElapsed }) {
-  // remove previous
-  document.getElementById('undo-snackbar')?.remove();
-
-  const bar = document.createElement('div');
-  bar.id = 'undo-snackbar';
-  bar.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] bg-gray-900 text-white text-sm rounded-md shadow-lg px-3 py-2 flex items-center gap-3';
-  const msg = document.createElement('span'); msg.textContent = text;
-  const btn = document.createElement('button'); btn.className = 'underline underline-offset-2';
-  let remaining = seconds; btn.textContent = `Undo (${remaining})`;
-
-  bar.append(msg, btn);
-  document.body.appendChild(bar);
-
-  const cleanup = () => { try { bar.remove(); } catch { } };
-  const tick = setInterval(() => {
-    remaining -= 1;
-    if (remaining <= 0) {
-      clearInterval(tick);
-      cleanup();
-      try { onElapsed?.(); } catch { }
-    } else {
-      btn.textContent = `Undo (${remaining})`;
-    }
-  }, 1000);
-
-  btn.addEventListener('click', () => {
-    clearInterval(tick);
-    cleanup();
-    try { onUndo?.(); } catch { }
-  });
-
-  return { dismiss() { clearInterval(tick); cleanup(); } };
-}
-function escapeHtml(s) { return String(s).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m])); }
-
-document.addEventListener('DOMContentLoaded', boot);
 
 async function boot() {
   const id = pid(); if (!id) { location.replace('/dashboard.html'); return; }
@@ -93,15 +57,16 @@ async function boot() {
 
   hydrateHeaderTitle();
   await hydrateDescription();
-  await loadSteps();
-  initBoardOrderFromSteps();
-  renderBoardFromSteps();
-  updateBoardCounts();
 
-  // Modals guaranteed to work regardless of inline script
+  const stepsHost = byId('steps-tree');
+  if (stepsHost) stepsHost.innerHTML = skeletonHtml();
+
+  await loadSteps();
+  renderAll();
+
   wireSettingsModal();
   wireChatModal();
-  wrapOpenAddStepModal(); // hook DB save into your existing #step-modal
+  wrapOpenAddStepModal();
 
   wireTimelineTab();
   wireBoardTab();
@@ -110,10 +75,10 @@ async function boot() {
 
   if (!byId('activity-content')?.classList.contains('hidden')) await renderActivity(false);
 
-  mountRealtime();
+  mountStepsRealtime();
 }
 
-/* ---------------- Header / Description ---------------- */
+/* ================ Header / Description ================ */
 function hydrateHeaderTitle() {
   const t = state.project?.title || 'Project';
   const h = byId('project-title') || $('[data-project="title"]') || $('h1');
@@ -130,21 +95,55 @@ async function hydrateDescription() {
   const bgImg = byId('project-bg-img') || byId('bgImg');
   const bg = state.project?.background;
   if (bgImg && bg) {
-    try { const url = await getSignedFileURL('project-files', bg, 3600); if (url) bgImg.src = url; } catch { }
+    try { const url = await getSignedFileURL('project-backgrounds', bg, 3600); if (url) bgImg.src = url; } catch { }
   }
 }
 
-/* ---------------- Steps tab ---------------- */
+/* ================= Data ================= */
+async function loadSteps() {
+  state.steps = await listSteps(state.id);
+  state.tree = buildTree(state.steps);
+}
+function buildTree(rows) {
+  const byParent = new Map();
+  for (const r of rows) {
+    const key = r.parent_id || 'ROOT';
+    if (!byParent.has(key)) byParent.set(key, []);
+    byParent.get(key).push(r);
+  }
+  for (const arr of byParent.values()) arr.sort((a, b) => (a.order_num ?? 0) - (b.order_num ?? 0));
+  const makeNode = (row) => ({ row, children: (byParent.get(row.id) || []).map(makeNode) });
+  return { row: null, children: (byParent.get('ROOT') || []).map(makeNode) };
+}
+
+/* ================= Render ================= */
+function renderAll() {
+  renderStepsTree();
+  initBoardOrderFromTopLevel();
+  renderBoardFromTopLevel();
+  updateBoardCounts();
+}
+
+function skeletonHtml() {
+  const row = `
+    <div class="rounded-lg border border-gray-200 bg-white p-2 animate-pulse">
+      <div class="h-4 w-2/3 bg-gray-200 rounded mb-2"></div>
+      <div class="h-3 w-1/3 bg-gray-200 rounded"></div>
+    </div>`;
+  return row + row + row;
+}
+
+/* ---------- Steps Tree using original card visuals ---------- */
 function stepsHost() { return byId('steps-tree'); }
 
-function stepRowMarkup(step, showActions) {
+function stepRowMarkup(step) {
   const uiStatus = db2ui(step.status);
   const due = step.due_date ? new Date(step.due_date).toISOString().slice(0, 10) : '';
   const title = step.name || '(untitled)';
   return `
-  <div class="step-item bg-white p-3 rounded-lg border border-gray-200 relative" data-id="${step.id}">
+  <div class="step-item bg-white p-3 rounded-lg border border-gray-200 relative" data-id="${step.id}" data-parent="${step.parent_id || ''}">
     <div class="flex items-start">
-      <button class="mr-2 text-gray-400 hover:text-gray-600" aria-label="Collapse/Expand">
+      <button class="mr-2 text-gray-400 hover:text-gray-600 disclose" aria-label="Collapse/Expand" aria-expanded="false">
         <i data-feather="chevron-right" class="w-4 h-4"></i>
       </button>
       <div class="flex-grow">
@@ -155,7 +154,7 @@ function stepRowMarkup(step, showActions) {
             <option value="review" ${uiStatus === 'review' ? 'selected' : ''}>Review</option>
             <option value="done" ${uiStatus === 'done' ? 'selected' : ''}>Done</option>
           </select>
-          <input type="text" class="font-medium flex-grow focus:outline-none" data-field="title" value="${escapeHtml(title)}" />
+          <input type="text" class="font-medium flex-grow focus:outline-none title" data-field="title" value="${ESC(title)}" />
         </div>
         <div class="mt-2 flex items-center text-xs text-gray-500 flex-wrap gap-x-3 gap-y-1">
           <div class="flex items-center">
@@ -166,7 +165,7 @@ function stepRowMarkup(step, showActions) {
           </div>
           <div class="flex items-center">
             <i data-feather="calendar" class="w-3 h-3 mr-1"></i>
-            <input type="text" data-datepicker class="text-xs border-none bg-transparent focus:outline-none" data-field="due" value="${due}" />
+            <input type="text" data-datepicker class="text-xs border-none bg-transparent focus:outline-none due" data-field="due" value="${due}" />
           </div>
           <button type="button" class="flex items-center text-gray-500 hover:text-indigo-700 focus:outline-none" data-action="comments">
             <i data-feather="message-circle" class="w-3 h-3 mr-1"></i><span>Comments</span>
@@ -180,269 +179,208 @@ function stepRowMarkup(step, showActions) {
         <button class="text-gray-400 hover:text-indigo-600" aria-label="More" data-action="more">
           <i data-feather="more-vertical" class="w-4 h-4"></i>
         </button>
-        ${showActions ? `
         <button class="text-gray-400 hover:text-red-500 ml-1" aria-label="Delete step" data-action="delete-step" title="Delete">
           <i data-feather="trash-2" class="w-4 h-4"></i>
-        </button>` : ``}
+        </button>
       </div>
     </div>
+    <div class="children pl-6 space-y-2 hidden"></div>
   </div>`;
 }
 
-function renderSteps() {
-  const host = stepsHost(); if (!host) return;
-  if (!host.dataset.cleaned) { host.innerHTML = ''; host.dataset.cleaned = '1'; }
+function renderStepsTree() {
+  const host = stepsHost(); if (!host || !state.tree) return;
 
-  if (!state.steps.length) {
-    host.innerHTML = '<div class="text-sm text-gray-500 py-2">No steps yet.</div>';
-    return;
-  }
-
-  const sorted = [...state.steps].sort((a, b) =>
-    (a.order_num ?? a.idx ?? 0) - (b.order_num ?? b.idx ?? 0) || new Date(a.created_at) - new Date(b.created_at)
-  );
+  // destroy previous Sortables
+  for (const s of state.nestedSortables) { try { s.destroy(); } catch { } }
+  state.nestedSortables.clear();
 
   host.innerHTML = '';
-  for (const s of sorted) {
-    const div = document.createElement('div');
-    div.innerHTML = stepRowMarkup(s, canWrite(state.role));
-    const node = div.firstElementChild;
-    host.appendChild(node);
+  const rootList = document.createElement('div');
+  rootList.className = 'space-y-2';
+  host.appendChild(rootList);
 
-    if (canWrite(state.role)) {
-      const delBtn = node.querySelector('[data-action="delete-step"]');
-      if (delBtn) {
-        delBtn.addEventListener('click', (e) => {
-          e.preventDefault();
-          const id = node.getAttribute('data-id');
-          if (!id) return;
+  const build = (node, depth, mount) => {
+    for (const child of node.children) {
+      const wrapper = document.createElement('div');
+      wrapper.innerHTML = stepRowMarkup(child.row);
+      const el = wrapper.firstElementChild;
+      mount.appendChild(el);
 
-          // finalize any previous pending delete immediately
-          try { state.pendingDelete?.finalizeNow?.(); } catch { }
-
-          // capture backup to allow local restore
-          const idx = state.steps.findIndex(x => x.id === id);
-          const backup = idx >= 0 ? state.steps[idx] : null;
-
-          // optimistic local remove
-          if (idx >= 0) state.steps.splice(idx, 1);
-          node.remove();
-          removeIdFromBoard(id);
-          renderSteps();
-          renderBoardFromSteps();
-          updateBoardCounts();
-
-          // show undo bar and delay server delete
-          const bar = showUndoSnackbar({
-            text: 'Step deleted',
-            seconds: 5,
-            onUndo: () => {
-              state.pendingDelete = null;
-              if (!backup) return;
-              // restore locally
-              state.steps.push(backup);                // order_num preserved from backup
-              moveIdBetweenColumns(backup.id, backup.status); // to end of its column (safe and simple)
-              renderSteps();
-              renderBoardFromSteps();
-              updateBoardCounts();
-            },
-            onElapsed: async () => {
-              try {
-                await deleteStep(id);
-                await logActivity(state.id, 'step_deleted', 'steps', { step_id: id });
-              } catch (err) {
-                // if server delete fails, restore locally as fallback
-                console.error(err);
-                toast('Delete failed');
-                if (backup && !state.steps.find(s => s.id === backup.id)) {
-                  state.steps.push(backup);
-                  moveIdBetweenColumns(backup.id, backup.status);
-                  renderSteps();
-                  renderBoardFromSteps();
-                  updateBoardCounts();
-                }
-              } finally {
-                state.pendingDelete = null;
-              }
-            }
-          });
-
-          // allow programmatic finalize (e.g., user deletes another step before timeout)
-          state.pendingDelete = {
-            id,
-            restore: backup,
-            async finalizeNow() {
-              try { bar.dismiss(); } catch { }
-              try {
-                await deleteStep(id);
-                await logActivity(state.id, 'step_deleted', 'steps', { step_id: id });
-              } catch { /* ignore */ }
-              state.pendingDelete = null;
-            }
-          };
-        });
+      // disclosure a11y
+      const btn = el.querySelector('.disclose');
+      const kids = el.querySelector('.children');
+      if (child.children.length) {
+        btn.setAttribute('aria-expanded', 'true');
+        kids.classList.remove('hidden');
+        btn.innerHTML = `<i data-feather="chevron-down" class="w-4 h-4"></i>`;
+      } else {
+        btn.classList.add('invisible');
       }
-
-    }
-  }
-
-  window.feather?.replace();
-
-  if (canWrite(state.role)) {
-    host.querySelectorAll('.step-item').forEach(card => {
-      const id = card.getAttribute('data-id');
-
-      const title = card.querySelector('[data-field="title"]');
-      title?.addEventListener('change', async () => {
-        try { await updateStep(id, { name: title.value.trim() || '(untitled)' }); }
-        catch (e) { console.error(e); toast('Rename failed'); }
+      btn.addEventListener('click', () => {
+        const open = btn.getAttribute('aria-expanded') === 'true';
+        btn.setAttribute('aria-expanded', open ? 'false' : 'true'); // required by WAI-ARIA Disclosure. :contentReference[oaicite:0]{index=0}
+        kids.classList.toggle('hidden', open);
+        btn.innerHTML = `<i data-feather="${open ? 'chevron-right' : 'chevron-down'}" class="w-4 h-4"></i>`;
+        window.feather?.replace();
       });
 
-      const statusSel = card.querySelector('[data-field="status"]');
+      // field bindings
+      const id = el.dataset.id;
+      const title = el.querySelector('.title');
+      const statusSel = el.querySelector('.status-select');
+      const due = el.querySelector('.due');
+
+      title?.addEventListener('change', async () => {
+        try { await updateStep(id, { name: title.value.trim() || '(untitled)' }); } catch { toast('Rename failed'); }
+      });
       statusSel?.addEventListener('change', async () => {
         const newDb = ui2db[statusSel.value] || 'open';
+        try { await updateStep(id, { status: newDb }); const s = state.steps.find(x => x.id === id); if (s) s.status = newDb; renderBoardFromTopLevel(); updateBoardCounts(); }
+        catch { toast('Status update failed'); }
+      });
+      // Flatpickr with week starting Monday
+      if (window.flatpickr && due && !due._fp) window.flatpickr(due, {
+        dateFormat: 'Y-m-d',
+        weekNumbers: true,
+        locale: { firstDayOfWeek: 1 } // Monday. Supported by flatpickr via locale. :contentReference[oaicite:1]{index=1}
+      });
+
+      el.querySelector('[data-action="add-substep"]')?.addEventListener('click', async () => {
+        if (!canWrite(state.role)) return toast('No permission');
+        const next = maxOrderAmong(id) + 1;
         try {
-          await updateStep(id, { status: newDb });
-          const s = state.steps.find(x => x.id === id);
-          if (s) s.status = newDb;
-          moveIdBetweenColumns(id, newDb); // to end of new column
-          renderBoardFromSteps();
+          const row = await createStep(state.id, { name: 'New substep', parent_id: id, order_num: next });
+          state.steps.push(row);
+          state.tree = buildTree(state.steps);
+          renderStepsTree();
+          renderBoardFromTopLevel();
           updateBoardCounts();
-        } catch (e) { console.error(e); toast('Status update failed'); }
+          await logActivity(state.id, 'step_created', 'steps', { step_id: row.id });
+        } catch { toast('Create failed'); }
       });
 
-      const due = card.querySelector('[data-field="due"]');
-      if (window.flatpickr && due && !due._fp) window.flatpickr(due, { dateFormat: 'Y-m-d', weekNumbers: true, locale: { firstDayOfWeek: 1 } });
-      due?.addEventListener('change', async () => {
-        try { await updateStep(id, { due_date: due.value || null }); }
-        catch (e) { console.error(e); toast('Date update failed'); }
-      });
-    });
+      el.querySelector('[data-action="delete-step"]')?.addEventListener('click', () => handleDelete(id));
 
-    // Steps list ordering (persists order_num)
-    if (state.sortableSteps) { state.sortableSteps.destroy(); state.sortableSteps = null; }
-    if (window.Sortable) {
-      state.sortableSteps = window.Sortable.create(host, {
-        handle: '.step-item',
-        draggable: '.step-item',
-        direction: 'vertical',
-        animation: 300,
-        swapThreshold: 0.65,
-        invertSwap: true,
-        ghostClass: 'drag-ghost',
-        chosenClass: 'drag-chosen',
-        dragClass: 'sortable-drag',
-        onStart: () => { document.body.classList.add('is-dragging'); host.classList.add('sorting'); },
-        onEnd: async () => {
-          document.body.classList.remove('is-dragging');
-          host.classList.remove('sorting');
-          const cards = Array.from(host.querySelectorAll('.step-item'));
-          const updates = cards.map((el, i) => ({ id: el.getAttribute('data-id'), order_num: i + 1 }));
-          updates.forEach(u => {
-            const s = state.steps.find(x => x.id === u.id);
-            if (s) { s.order_num = u.order_num; s.idx = u.order_num; }
-          });
-          try { await reorderSteps(state.id, updates); toast('Order updated'); }
-          catch (err) { console.error('reorder failed', err); toast('Reorder failed'); await loadSteps(); }
-        }
-      });
+      // recurse
+      build(child, depth + 1, el.querySelector('.children'));
     }
+  };
+
+  build(state.tree, 0, rootList);
+  wireNestedSortables(host);
+  try { window.feather?.replace(); } catch { }
+}
+
+/* Nested Sortable wiring */
+function wireNestedSortables(host) {
+  const containers = [host.querySelector('.space-y-2'), ...host.querySelectorAll('.children')];
+  containers.forEach(el => {
+    if (!window.Sortable) return;
+    const s = new Sortable(el, {
+      group: 'steps-nested',
+      animation: 180,
+      handle: '.title, .disclose',
+      ghostClass: 'drag-ghost',
+      chosenClass: 'drag-chosen',
+      dragClass: 'is-dragging',
+      fallbackOnBody: true,              // Sortable nested guidance. :contentReference[oaicite:2]{index=2}
+      swapThreshold: 0.65,
+      onAdd: onSortOrAdd,
+      onUpdate: onSortOrAdd
+    });
+    state.nestedSortables.add(s);
+  });
+}
+function onSortOrAdd(evt) {
+  const container = evt.to;
+  const parentStepEl = container.closest('.step-item');
+  const newParentId = parentStepEl ? parentStepEl.dataset.id : null;
+
+  const ids = Array.from(container.children)
+    .map(ch => ch.closest('.step-item')?.dataset.id)
+    .filter(Boolean);
+
+  const updates = ids.map((id, idx) => ({ id, order_num: idx, parent_id: newParentId }));
+  persistReorder(updates);
+}
+async function persistReorder(updates) {
+  try { await reorderSteps(state.id, updates); }
+  catch { await loadSteps(); }
+  finally {
+    state.tree = buildTree(state.steps);
+    renderStepsTree();
+    renderBoardFromTopLevel();
+    updateBoardCounts();
   }
 }
 
-async function loadSteps() {
-  try {
-    state.steps = await listSteps(state.id);
-    renderSteps();
-  } catch (e) { console.error(e); }
+function maxOrderAmong(parentId) {
+  const sibs = state.steps.filter(s => (s.parent_id || null) === (parentId || null));
+  return sibs.reduce((m, s) => Math.max(m, s.order_num ?? 0), -1);
 }
 
-/* ---------- Add Step modal: use your HTML, add DB save ---------- */
-function stepModalEls() {
-  const root = byId('step-modal'); if (!root) return null;
-  const nameI = root.querySelector('input[type="text"]:not([data-datepicker])');
-  const notesI = root.querySelector('textarea');
-  const statusI = root.querySelector('select'); // first select is Status in your modal
-  const dueI = root.querySelector('input[data-datepicker]') || root.querySelector('input[type="date"]');
-  const saveBtn = root.querySelector('.bg-gray-50 button.bg-indigo-600'); // footer Save
-  return { root, nameI, notesI, statusI, dueI, saveBtn };
+/* ---------- Delete with Undo (single row) ---------- */
+function showUndoSnackbar({ text = 'Deleted', seconds = 5, onUndo, onElapsed }) {
+  document.getElementById('undo-snackbar')?.remove();
+  const bar = document.createElement('div');
+  bar.id = 'undo-snackbar';
+  bar.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] bg-gray-900 text-white text-sm rounded-md shadow-lg px-3 py-2 flex items-center gap-3';
+  const msg = document.createElement('span'); msg.textContent = text;
+  const btn = document.createElement('button'); btn.className = 'underline underline-offset-2';
+  let remaining = seconds; btn.textContent = `Undo (${remaining})`;
+  bar.append(msg, btn); document.body.appendChild(bar);
+  const cleanup = () => { try { bar.remove(); } catch { } };
+  const tick = setInterval(() => {
+    remaining -= 1;
+    if (remaining <= 0) { clearInterval(tick); cleanup(); try { onElapsed?.(); } catch { } }
+    else btn.textContent = `Undo (${remaining})`;
+  }, 1000);
+  btn.addEventListener('click', () => { clearInterval(tick); cleanup(); try { onUndo?.(); } catch { } });
+  return { dismiss() { try { cleanup(); } catch { } } };
 }
-function bindStepModalSaveOnce() {
-  const els = stepModalEls(); if (!els) return;
-  if (window.flatpickr && els.dueI && !els.dueI._fp) window.flatpickr(els.dueI, { dateFormat: 'Y-m-d', weekNumbers: true, locale: { firstDayOfWeek: 1 } });
-  const onSave = async (e) => {
-    e.preventDefault();
-    if (!canWrite(state.role)) { toast('You cannot add steps'); return; }
-    if (!els.nameI?.value?.trim()) { toast('Title required'); els.nameI?.focus(); return; }
-    try {
-      const max = state.steps.reduce((m, s) => Math.max(m, (s.order_num ?? s.idx ?? 0)), 0);
-      const payload = {
-        name: els.nameI.value.trim(),
-        notes: els.notesI?.value?.trim() || null,
-        status: ui2db[(els.statusI?.value || 'todo').toLowerCase()] || 'open',
-        due_date: els.dueI?.value || null,
-        order_num: max + 1,
-        idx: max + 1,
-      };
-      const row = await createStep(state.id, payload);
-      state.steps.push(row);
-      moveIdBetweenColumns(row.id, row.status);
-      renderSteps();
-      renderBoardFromSteps();
-      updateBoardCounts();
-      await logActivity(state.id, 'step_created', 'steps', { step_id: row.id });
-      // close via your inline function if present
-      window.closeStepModal?.();
-    } catch (err) { console.error(err); toast('Create failed'); }
+function handleDelete(id) {
+  try { state.pendingDelete?.finalizeNow?.(); } catch { }
+
+  const idx = state.steps.findIndex(x => x.id === id);
+  const backup = idx >= 0 ? state.steps[idx] : null;
+
+  const removeLocal = () => {
+    const i = state.steps.findIndex(s => s.id === id);
+    if (i >= 0) state.steps.splice(i, 1);
+    state.tree = buildTree(state.steps);
+    renderStepsTree();
+    renderBoardFromTopLevel();
+    updateBoardCounts();
   };
-  els.saveBtn?.addEventListener('click', onSave, { once: true });
-}
-function wrapOpenAddStepModal() {
-  const existing = window.openAddStepModal;
-  window.openAddStepModal = function wrapped() {
-    if (typeof existing === 'function') existing();
-    bindStepModalSaveOnce();
+  removeLocal();
+
+  const bar = showUndoSnackbar({
+    text: 'Step deleted',
+    seconds: 5,
+    onUndo: () => {
+      state.pendingDelete = null;
+      if (backup) { state.steps.push(backup); state.tree = buildTree(state.steps); renderStepsTree(); renderBoardFromTopLevel(); updateBoardCounts(); }
+    },
+    onElapsed: async () => {
+      try { await deleteStep(id); await logActivity(state.id, 'step_deleted', 'steps', { step_id: id }); }
+      catch { toast('Delete failed'); if (backup) { state.steps.push(backup); state.tree = buildTree(state.steps); renderStepsTree(); renderBoardFromTopLevel(); updateBoardCounts(); } }
+      finally { state.pendingDelete = null; }
+    }
+  });
+
+  state.pendingDelete = {
+    id,
+    async finalizeNow() {
+      try { bar.dismiss(); } catch { }
+      try { await deleteStep(id); await logActivity(state.id, 'step_deleted', 'steps', { step_id: id }); }
+      catch { }
+      state.pendingDelete = null;
+    }
   };
 }
-window.closeStepModal = window.closeStepModal || (() => {
-  const m = byId('step-modal');
-  if (m) { m.classList.add('hidden'); document.documentElement.classList.remove('overflow-hidden'); }
-});
 
-/* ---------- Settings modal (force-wire) ---------- */
-function wireSettingsModal() {
-  const btn = byId('settings-open');
-  const modal = byId('settings-modal');
-  const frame = byId('settings-frame');
-  if (!btn || !modal || !frame) return;
-  if (btn.dataset.bound === '1') return;
-  btn.dataset.bound = '1';
-  btn.addEventListener('click', (e) => {
-    e.preventDefault(); e.stopPropagation();
-    frame.src = `/projects/settings.html?id=${encodeURIComponent(state.id)}`;
-    document.documentElement.classList.add('overflow-hidden');
-    modal.classList.remove('hidden');
-  });
-  window.closeSettingsModal = () => { document.documentElement.classList.remove('overflow-hidden'); modal.classList.add('hidden'); };
-}
-/* ---------- Chat modal (force-wire) ---------- */
-function wireChatModal() {
-  const btn = byId('chat-open');
-  const modal = byId('chat-modal');
-  const frame = byId('chat-frame');
-  if (!btn || !modal || !frame) return;
-  if (btn.dataset.bound === '1') return;
-  btn.dataset.bound = '1';
-  btn.addEventListener('click', (e) => {
-    e.preventDefault(); e.stopPropagation();
-    frame.src = `/projects/chat.html?id=${encodeURIComponent(state.id)}`;
-    document.documentElement.classList.add('overflow-hidden');
-    modal.classList.remove('hidden');
-  });
-  window.closeChatModal = () => { document.documentElement.classList.remove('overflow-hidden'); modal.classList.add('hidden'); };
-}
-
-/* ---------- Timeline ---------- */
+/* ================= Timeline ================= */
 function wireTimelineTab() {
   const btn = document.querySelector('.tab-button[data-tab="timeline"]');
   if (!btn || btn.dataset.boundTimeline === '1') return;
@@ -456,36 +394,30 @@ function renderTimelineFromSteps() {
   if (!mount) { mount = document.createElement('div'); mount.id = mountId; host.appendChild(mount); }
   while (mount.firstChild) mount.removeChild(mount.firstChild);
 
-  const rows = (state?.steps || []).filter(s => s.due_date).slice()
+  const rows = (state?.steps || []).filter(s => !!s.due_date)
     .sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
 
   if (rows.length === 0) {
-    const empty = document.createElement('p');
-    empty.className = 'text-sm text-gray-500';
-    empty.textContent = 'No dated steps yet.';
-    mount.appendChild(empty);
-    return;
+    const p = document.createElement('p'); p.className = 'text-sm text-gray-500'; p.textContent = 'No dated steps yet.'; mount.appendChild(p); return;
   }
 
-  const ul = document.createElement('ul');
-  ul.className = 'space-y-2';
+  const ul = document.createElement('ul'); ul.className = 'space-y-2';
   for (const s of rows) {
     const li = document.createElement('li');
     li.className = 'flex items-start justify-between rounded-lg border border-gray-200 bg-white px-3 py-2';
     li.innerHTML = `
       <div class="min-w-0">
-        <p class="text-sm font-medium text-gray-900 truncate">${escapeHtml(s.name || 'Untitled')}</p>
-        <p class="text-xs text-gray-500">${s.status?.replace('_', ' ') || ''}</p>
+        <p class="text-sm font-medium text-gray-900 truncate">${ESC(s.name || 'Untitled')}</p>
+        <p class="text-xs text-gray-500">${(s.status || '').replace('_', ' ')}</p>
       </div>
-      <div class="text-sm text-gray-700 ml-3 whitespace-nowrap">${s.due_date}</div>
-    `;
+      <div class="text-sm text-gray-700 ml-3 whitespace-nowrap">${s.due_date}</div>`;
     ul.appendChild(li);
   }
   mount.appendChild(ul);
   try { window.feather?.replace(); } catch { }
 }
 
-/* ---------- Activity (DB only) ---------- */
+/* ================= Activity ================= */
 function wireActivityTab() {
   const btn = document.querySelector('.tab-button[data-tab="activity"]');
   if (!btn || btn.dataset.boundActivity === '1') return;
@@ -523,12 +455,12 @@ function timeAgo(ts) {
 }
 function buildActivityLine(kind, meta, stepTitle) {
   switch (kind) {
-    case 'step_created': return `Step created: ${escapeHtml(stepTitle || meta?.step_name || '')}`;
-    case 'step_updated': return `Step updated: ${escapeHtml(stepTitle || meta?.step_name || '')}`;
+    case 'step_created': return `Step created: ${ESC(stepTitle || meta?.step_name || '')}`;
+    case 'step_updated': return `Step updated: ${ESC(stepTitle || meta?.step_name || '')}`;
     case 'step_deleted': return `Step deleted`;
-    case 'file_uploaded': return `File uploaded: ${escapeHtml(meta?.name || '')}`;
-    case 'member_invited': return `Member invited: ${escapeHtml(meta?.email || '')}`;
-    default: return escapeHtml(kind || 'event');
+    case 'file_uploaded': return `File uploaded: ${ESC(meta?.name || '')}`;
+    case 'member_invited': return `Member invited: ${ESC(meta?.email || '')}`;
+    default: return ESC(kind || 'event');
   }
 }
 function safeJson(x) { try { return typeof x === 'string' ? JSON.parse(x) : x; } catch { return {}; } }
@@ -547,9 +479,7 @@ async function renderActivity(openedByUser = false) {
   const profiles = await (async () => { try { return await fetchProfilesMap(actorIds); } catch { return new Map(); } })();
   const stepsMap = await (async () => { try { return await fetchStepsMap(stepIds); } catch { return new Map(); } })();
 
-  // hide static demo items from HTML
-  const demoWrap = host.querySelector('.space-y-4');
-  demoWrap?.classList.add('hidden');
+  host.querySelector('.space-y-4')?.classList.add('hidden');
 
   let mount = byId('activity-live');
   if (!mount) { mount = document.createElement('div'); mount.id = 'activity-live'; host.appendChild(mount); }
@@ -577,7 +507,6 @@ async function renderActivity(openedByUser = false) {
 
       const li = document.createElement('li');
       li.className = 'p-3';
-      li.setAttribute('data-activity-id', a.id);
       const when = timeAgo(a.created_at);
       const avatarUrl = await resolveAvatarUrl(prof.avatar, a.actor_id);
 
@@ -586,7 +515,7 @@ async function renderActivity(openedByUser = false) {
           <img class="h-8 w-8 rounded-full object-cover bg-gray-100" src="${avatarUrl}" alt="">
           <div class="min-w-0 flex-1">
             <div class="flex items-center justify-between">
-              <p class="text-sm font-medium text-gray-900 truncate">${escapeHtml(prof.name)}</p>
+              <p class="text-sm font-medium text-gray-900 truncate">${ESC(prof.name)}</p>
               <span class="text-xs text-gray-500 whitespace-nowrap">${when}</span>
             </div>
             <p class="text-sm text-gray-900 mt-0.5">${buildActivityLine(a.kind, meta, stepTitle)}</p>
@@ -599,8 +528,7 @@ async function renderActivity(openedByUser = false) {
 
   if (badge) {
     if (openedByUser) {
-      badge.classList.add('hidden');
-      badge.textContent = '0';
+      badge.classList.add('hidden'); badge.textContent = '0';
       if (newestTs) localStorage.setItem(key, String(newestTs));
     } else {
       if (unseen > 0) { badge.textContent = String(unseen); badge.classList.remove('hidden'); }
@@ -609,53 +537,47 @@ async function renderActivity(openedByUser = false) {
   }
 }
 
-/* ---------- Board ---------- */
+/* ================= Board (top-level only) ================= */
 function wireBoardTab() {
   const btn = document.querySelector('.tab-button[data-tab="board"]');
   if (!btn || btn.dataset.boundBoard === '1') return;
   btn.dataset.boundBoard = '1';
-  btn.addEventListener('click', () => { try { renderBoardFromSteps(); updateBoardCounts(); } catch { } });
+  btn.addEventListener('click', () => { try { renderBoardFromTopLevel(); updateBoardCounts(); } catch { } });
 }
-
-function initBoardOrderFromSteps() {
-  const buckets = groupByStatus();
-  state.boardOrder.backlog = buckets.backlog.map(s => s.id);
-  state.boardOrder.inprogress = buckets.inprogress.map(s => s.id);
-  state.boardOrder.review = buckets.review.map(s => s.id);
-  state.boardOrder.done = buckets.done.map(s => s.id);
-}
-
-function groupByStatus() {
+function groupByStatusTopLevel() {
+  const tops = state.steps.filter(s => !s.parent_id);
   const bucket = { backlog: [], inprogress: [], review: [], done: [] };
-  for (const s of state.steps) {
+  for (const s of tops) {
     const ui = ({ open: 'backlog', in_progress: 'inprogress', review: 'review', done: 'done' }[String(s.status).toLowerCase()] || 'backlog');
     bucket[ui].push(s);
   }
   Object.values(bucket).forEach(list => list.sort((a, b) => (a.order_num ?? 0) - (b.order_num ?? 0)));
   return bucket;
 }
-
+function initBoardOrderFromTopLevel() {
+  const buckets = groupByStatusTopLevel();
+  state.boardOrder.backlog = buckets.backlog.map(s => s.id);
+  state.boardOrder.inprogress = buckets.inprogress.map(s => s.id);
+  state.boardOrder.review = buckets.review.map(s => s.id);
+  state.boardOrder.done = buckets.done.map(s => s.id);
+}
 function ensureSentinel(host) {
-  // A non-draggable item at the end to allow dropping into empty space -> last position.
   if (!host) return;
   if (!host.querySelector('.board-sentinel')) {
     const s = document.createElement('div');
-    s.className = 'board-sentinel h-1'; // tiny height; not draggable
+    s.className = 'board-sentinel h-1';
     host.appendChild(s);
   }
 }
-
-function renderBoardFromSteps() {
+function renderBoardFromTopLevel() {
   const cols = {
     backlog: byId('backlog-column'),
     inprogress: byId('inprogress-column'),
     review: byId('review-column'),
     done: byId('done-column')
   };
+  const buckets = groupByStatusTopLevel();
 
-  const buckets = groupByStatus();
-
-  // sanitize local order against current items and append missing to tail
   for (const key of Object.keys(state.boardOrder)) {
     const present = new Set(buckets[key].map(s => s.id));
     state.boardOrder[key] = state.boardOrder[key].filter(id => present.has(id));
@@ -672,20 +594,19 @@ function renderBoardFromSteps() {
       const row = map.get(id); if (!row) continue;
       const div = document.createElement('div');
       div.className = 'step-card bg-white p-3 rounded-lg shadow-sm border border-gray-200 step-item';
-      div.setAttribute('data-id', row.id);
+      div.dataset.id = row.id;
+      const subCount = state.steps.filter(s => s.parent_id === row.id).length;
       div.innerHTML = `
-        <p class="text-sm font-medium ${row.status === 'done' ? 'line-through' : ''}">${escapeHtml(row.name || 'Untitled')}</p>
+        <p class="text-sm font-medium ${row.status === 'done' ? 'line-through' : ''}">${ESC(row.name || 'Untitled')}</p>
         <div class="mt-2 flex items-center justify-between">
           <span class="text-xs text-gray-500">${row.due_date ? 'Due ' + row.due_date : ''}</span>
-          <i data-feather="hash" class="w-4 h-4 text-gray-300"></i>
+          <span class="text-[10px] text-gray-400">${subCount ? `${subCount} substeps` : ''}</span>
         </div>`;
       host.appendChild(div);
     }
 
-    // allow “drop to whitespace to land last”
     ensureSentinel(host);
 
-    // Rename "Backlog" header to "To Do"
     if (key === 'backlog') {
       const wrapper = host.closest('.bg-gray-50.rounded-lg.p-3');
       const h5 = wrapper?.querySelector('h5');
@@ -697,9 +618,8 @@ function renderBoardFromSteps() {
   initBoardDnD(cols);
   updateBoardCounts();
 }
-
 function updateBoardCounts() {
-  const buckets = groupByStatus();
+  const buckets = groupByStatusTopLevel();
   const map = {
     backlog: byId('backlog-column'),
     inprogress: byId('inprogress-column'),
@@ -713,18 +633,14 @@ function updateBoardCounts() {
     if (countSpan) countSpan.textContent = String(buckets[key].length);
   }
 }
-
 function removeIdFromBoard(id) {
-  for (const k of Object.keys(state.boardOrder)) {
-    state.boardOrder[k] = state.boardOrder[k].filter(x => x !== id);
-  }
+  for (const k of Object.keys(state.boardOrder)) state.boardOrder[k] = state.boardOrder[k].filter(x => x !== id);
 }
 function moveIdBetweenColumns(id, newDbStatus) {
   const key = ({ open: 'backlog', in_progress: 'inprogress', review: 'review', done: 'done' }[String(newDbStatus).toLowerCase()] || 'backlog');
   removeIdFromBoard(id);
-  state.boardOrder[key].push(id); // to end
+  state.boardOrder[key].push(id);
 }
-
 function boardKeyFromContainer(el) {
   const id = el?.id || '';
   if (id.startsWith('inprogress')) return 'inprogress';
@@ -732,97 +648,141 @@ function boardKeyFromContainer(el) {
   if (id.startsWith('done')) return 'done';
   return 'backlog';
 }
-
 function syncBoardOrderFromDOM(cols) {
   for (const [key, host] of Object.entries(cols)) {
     if (!host) continue;
-    state.boardOrder[key] = Array.from(host.querySelectorAll('.step-item')).map(n => n.getAttribute('data-id'));
+    state.boardOrder[key] = Array.from(host.querySelectorAll('.step-item')).map(n => n.dataset.id);
   }
 }
-
 function initBoardDnD(cols) {
   if (!window.Sortable) return;
-
   const opts = {
     group: { name: 'board', pull: true, put: true },
     sort: true,
     animation: 200,
-    delay: 0,
-    fallbackOnBody: true,
-    forceFallback: false,
-    emptyInsertThreshold: 24, // easier to drop into empty space
-    swapThreshold: 0.5,
+    emptyInsertThreshold: 24,
     ghostClass: 'opacity-50',
-    draggable: '.step-item',           // sentinel not draggable
-    filter: '.board-sentinel',         // ignore sentinel
+    draggable: '.step-item',
+    filter: '.board-sentinel',
     onAdd: async (evt) => {
       const el = evt.item;
-      const id = el.getAttribute('data-id');
+      const id = el.dataset.id;
       const toKey = boardKeyFromContainer(evt.to);
       try {
         const db = ({ backlog: 'open', inprogress: 'in_progress', review: 'review', done: 'done' }[toKey]) || 'open';
-        await updateStep(id, { status: db });      // status only; no order_num change
+        await updateStep(id, { status: db });
         const s = state.steps.find(x => x.id === id); if (s) s.status = db;
-        syncBoardOrderFromDOM(cols);               // record new local column order (including end position)
-        // repaint to avoid any stuck drag ghost or need to re-grab
-        renderBoardFromSteps();
-        updateBoardCounts();
+        syncBoardOrderFromDOM(cols);
+        renderBoardFromTopLevel(); updateBoardCounts();
       } catch (e) { console.error(e); }
     },
-    onUpdate: () => { syncBoardOrderFromDOM(cols); }, // same-column reorder (local only)
+    onUpdate: () => { syncBoardOrderFromDOM(cols); },
     onEnd: () => { syncBoardOrderFromDOM(cols); updateBoardCounts(); }
   };
-
   for (const host of Object.values(cols)) {
     if (!host) continue;
-    // rebind every render for stability (remove old Sortable if present)
     if (host.__sortable) { try { host.__sortable.destroy(); } catch { } host.__sortable = null; }
     ensureSentinel(host);
     host.__sortable = new Sortable(host, opts);
   }
 }
 
-/* ---------- Realtime ---------- */
-function mountRealtime() {
-  if (state.unsub) state.unsub();
+/* ================= Realtime: Steps ================= */
+function mountStepsRealtime() {
+  if (state.unsubSteps) state.unsubSteps();
   let t = null;
-  state.unsub = subscribeSteps(state.id, (payload) => {
-    const { eventType, new: n, old: o } = payload;
-
-    if (eventType === 'INSERT') {
-      if (!state.steps.some(s => s.id === n.id)) {
-        state.steps.push(n);
-        moveIdBetweenColumns(n.id, n.status);
-        renderSteps();
-        renderBoardFromSteps();
-        updateBoardCounts();
-      }
-    } else if (eventType === 'UPDATE') {
-      const i = state.steps.findIndex(s => s.id === n.id);
-      if (i >= 0) {
-        state.steps[i] = { ...state.steps[i], ...n };
-        if (n?.status) moveIdBetweenColumns(n.id, n.status);
-      }
-      clearTimeout(t);
-      t = setTimeout(() => {
-        if (!document.body.classList.contains('is-dragging')) {
-          renderSteps();
-          renderBoardFromSteps();
-          updateBoardCounts();
-        }
-      }, 160);
-    } else if (eventType === 'DELETE') {
-      const i = state.steps.findIndex(s => s.id === o.id);
-      if (i >= 0) { state.steps.splice(i, 1); removeIdFromBoard(o.id); }
-      renderSteps();
-      renderBoardFromSteps();
-      updateBoardCounts();
-    }
+  state.unsubSteps = subscribeSteps(state.id, async () => {
+    const prev = window.scrollY;
+    await loadSteps();
+    renderAll();
+    window.scrollTo(0, prev);
+    clearTimeout(t);
   });
-  window.addEventListener('beforeunload', () => { try { state.unsub?.(); } catch { } });
+  window.addEventListener('beforeunload', () => { try { state.unsubSteps?.(); } catch { } });
 }
 
-/* ---------- Invite token accept ---------- */
+/* ================= Add Step modal ================= */
+function stepModalEls() {
+  const root = byId('step-modal'); if (!root) return null;
+  const nameI = root.querySelector('input[type="text"]:not([data-datepicker])');
+  const notesI = root.querySelector('textarea');
+  const statusI = root.querySelector('select');
+  const dueI = root.querySelector('input[data-datepicker]') || root.querySelector('input[type="date"]');
+  const saveBtn = root.querySelector('.bg-gray-50 button.bg-indigo-600');
+  return { root, nameI, notesI, statusI, dueI, saveBtn };
+}
+function bindStepModalSaveOnce() {
+  const els = stepModalEls(); if (!els) return;
+  if (window.flatpickr && els.dueI && !els.dueI._fp) window.flatpickr(els.dueI, {
+    dateFormat: 'Y-m-d',
+    weekNumbers: true,
+    locale: { firstDayOfWeek: 1 } // Monday. :contentReference[oaicite:3]{index=3}
+  });
+  const onSave = async (e) => {
+    e.preventDefault();
+    if (!canWrite(state.role)) return toast('You cannot add steps');
+    if (!els.nameI?.value?.trim()) { toast('Title required'); els.nameI?.focus(); return; }
+    try {
+      const order = maxOrderAmong(null) + 1;
+      const payload = {
+        name: els.nameI.value.trim(),
+        notes: els.notesI?.value?.trim() || null,
+        status: ui2db[(els.statusI?.value || 'todo').toLowerCase()] || 'open',
+        due_date: els.dueI?.value || null,
+        order_num: order,
+        parent_id: null
+      };
+      const row = await createStep(state.id, payload);
+      state.steps.push(row);
+      state.tree = buildTree(state.steps);
+      renderStepsTree();
+      renderBoardFromTopLevel();
+      updateBoardCounts();
+      await logActivity(state.id, 'step_created', 'steps', { step_id: row.id });
+      window.closeStepModal?.();
+    } catch { toast('Create failed'); }
+  };
+  els.saveBtn?.addEventListener('click', onSave, { once: true });
+}
+function wrapOpenAddStepModal() {
+  const existing = window.openAddStepModal;
+  window.openAddStepModal = function wrapped() {
+    if (typeof existing === 'function') existing();
+    bindStepModalSaveOnce();
+  };
+}
+window.closeStepModal = window.closeStepModal || (() => {
+  const m = byId('step-modal');
+  if (m) { m.classList.add('hidden'); document.documentElement.classList.remove('overflow-hidden'); }
+});
+
+/* ================= Settings / Chat Modals ================= */
+function wireSettingsModal() {
+  const btn = byId('settings-open'), modal = byId('settings-modal'), frame = byId('settings-frame');
+  if (!btn || !modal || !frame) return;
+  if (btn.dataset.bound === '1') return;
+  btn.dataset.bound = '1';
+  btn.addEventListener('click', (e) => {
+    e.preventDefault(); e.stopPropagation();
+    frame.src = `/projects/settings.html?id=${encodeURIComponent(state.id)}`;
+    document.documentElement.classList.add('overflow-hidden'); modal.classList.remove('hidden');
+  });
+  window.closeSettingsModal = () => { document.documentElement.classList.remove('overflow-hidden'); modal.classList.add('hidden'); };
+}
+function wireChatModal() {
+  const btn = byId('chat-open'), modal = byId('chat-modal'), frame = byId('chat-frame');
+  if (!btn || !modal || !frame) return;
+  if (btn.dataset.bound === '1') return;
+  btn.dataset.bound = '1';
+  btn.addEventListener('click', (e) => {
+    e.preventDefault(); e.stopPropagation();
+    frame.src = `/projects/chat.html?id=${encodeURIComponent(state.id)}`;
+    document.documentElement.classList.add('overflow-hidden'); modal.classList.remove('hidden');
+  });
+  window.closeChatModal = () => { document.documentElement.classList.remove('overflow-hidden'); modal.classList.add('hidden'); };
+}
+
+/* ================= Invite accept (no-op if absent) ================= */
 (function acceptInviteIfPresent() {
   const u = new URL(location.href);
   const token = u.searchParams.get('invite');

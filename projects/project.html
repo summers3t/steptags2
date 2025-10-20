@@ -5,16 +5,36 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Project · StepTags Pro</title>
+
+    <!-- libs -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/feather-icons"></script>
-    <!-- <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.14.0/Sortable.min.js"></script> -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
+        :root {
+            --project-bg: #f9fafb;
+        }
+
         body {
-            font-family: 'Inter', sans-serif
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* Page background lives on .app-surface, not modals */
+        .app-surface {
+            min-height: 100vh;
+            background: var(--project-bg, #f9fafb);
+            background-size: cover;
+            background-position: center;
+            transition: background 160ms ease;
+        }
+
+        /* Keep modals and sheets on white */
+        .modal-surface {
+            background: #fff;
         }
 
         .gradient-text {
@@ -62,478 +82,453 @@
             background: #f0f7ff
         }
 
-        /* ========== SMOOTH DRAG & DROP ANIMATIONS ========== */
-
-        /* All step items get smooth transitions by default */
+        /* DnD niceties */
         #steps-tree .step-item {
-            transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-                opacity 0.2s ease,
-                box-shadow 0.2s ease;
+            transition: transform .3s cubic-bezier(.25, .46, .45, .94), opacity .2s ease, box-shadow .2s ease;
             will-change: transform;
         }
 
-        /* When actively sorting, make transitions snappier for better responsiveness */
         #steps-tree.sorting .step-item {
-            transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
-                opacity 0.15s ease;
+            transition: transform .22s cubic-bezier(.34, 1.56, .64, 1), opacity .15s ease;
         }
 
-        /* The dragged item (ghost) - floats with cursor */
         .drag-ghost {
-            opacity: 0.85 !important;
+            opacity: .85 !important;
             transform: scale(1.02) rotate(1deg);
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15),
-                0 10px 20px rgba(0, 0, 0, 0.1) !important;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, .15), 0 10px 20px rgba(0, 0, 0, .1) !important;
             cursor: grabbing !important;
             z-index: 9999 !important;
-            background: white !important;
+            background: white !important
         }
 
-        /* The placeholder gap where item will land */
         .drag-chosen {
-            opacity: 0.4 !important;
-            transform: scale(0.98);
+            opacity: .4 !important;
+            transform: scale(.98);
             background: #f3f4f6 !important;
-            border: 2px dashed #a5b4fc !important;
+            border: 2px dashed #a5b4fc !important
         }
 
-        /* Item being picked up */
-        .sortable-chosen {
-            cursor: grabbing !important;
-        }
-
-        /* Smooth dragging cursor */
-        .sortable-drag {
-            cursor: grabbing !important;
-        }
-
-        /* Prevent text selection and flickering during drag */
+        .sortable-chosen,
+        .sortable-drag,
         .is-dragging,
         .is-dragging * {
-            user-select: none !important;
-            -webkit-user-select: none !important;
             cursor: grabbing !important;
+            user-select: none !important;
+            -webkit-user-select: none !important
         }
 
-        /* Add subtle hover effect on items */
         #steps-tree .step-item:hover {
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, .08)
         }
 
-        /* When sorting is active, reduce hover effects to avoid visual conflicts */
         #steps-tree.sorting .step-item:hover {
-            box-shadow: none;
+            box-shadow: none
         }
 
-        /* Prefer reduced motion: keep animations subtle or off */
-        @media (prefers-reduced-motion: reduce) {
+        @media (prefers-reduced-motion:reduce) {
             .transition {
-                transition: none !important;
+                transition: none !important
             }
         }
     </style>
 </head>
 
 <body class="bg-gray-50">
-    <!-- Shared header (same markup as dashboard, hydrated via /js/header.js) -->
-    <header
-        class="bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/60 sticky top-0 z-40 border-b border-gray-100">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="h-16 flex items-center justify-between">
-                <a href="../dashboard.html" class="flex items-center gap-2">
-                    <span class="inline-flex items-center justify-center rounded-xl bg-indigo-50 p-2">
-                        <i data-feather="tag" class="w-5 h-5 text-indigo-600" aria-hidden="true"></i>
-                    </span>
-                    <span class="text-xl font-bold">StepTags <span class="gradient-text">Pro</span></span>
-                </a>
-                <div class="flex items-center gap-2">
-                    <button
-                        class="relative rounded-full p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
-                        aria-label="Notifications">
-                        <i data-feather="bell" class="w-5 h-5" aria-hidden="true"></i>
-                        <span class="absolute -top-0.5 -right-0.5 inline-flex h-2 w-2 rounded-full bg-red-500"></span>
-                    </button>
-                    <div class="relative" id="user-menu-root">
-                        <button id="user-menu-btn"
-                            class="inline-flex items-center gap-2 rounded-full pl-1 pr-2 py-1 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
-                            aria-haspopup="menu" aria-expanded="false">
-                            <!-- transparent 1x1 to avoid flash; header.js will set real src -->
-                            <img id="avatar" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" alt="Avatar"
-                                class="w-8 h-8 rounded-full bg-gray-200" />
-                            <!-- <img id="avatar" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" ...> -->
-                            <span id="display-name"
-                                class="hidden sm:inline text-sm font-medium text-gray-700">User</span>
-                            <i data-feather="chevron-down" class="w-4 h-4 text-gray-500" aria-hidden="true"></i>
+    <!-- Everything that should receive the project background goes inside .app-surface -->
+    <div id="app-surface" class="app-surface">
+        <!-- Header (stays translucent on top of background) -->
+        <header
+            class="bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/60 sticky top-0 z-40 border-b border-gray-100">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="h-16 flex items-center justify-between">
+                    <a href="../dashboard.html" class="flex items-center gap-2">
+                        <span class="inline-flex items-center justify-center rounded-xl bg-indigo-50 p-2">
+                            <i data-feather="tag" class="w-5 h-5 text-indigo-600" aria-hidden="true"></i>
+                        </span>
+                        <span class="text-xl font-bold">StepTags <span class="gradient-text">Pro</span></span>
+                    </a>
+                    <div class="flex items-center gap-2">
+                        <button
+                            class="relative rounded-full p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                            aria-label="Notifications">
+                            <i data-feather="bell" class="w-5 h-5" aria-hidden="true"></i>
+                            <span
+                                class="absolute -top-0.5 -right-0.5 inline-flex h-2 w-2 rounded-full bg-red-500"></span>
                         </button>
-                        <div id="user-menu"
-                            class="hidden absolute right-0 mt-2 w-48 rounded-md border border-gray-200 bg-white shadow-md"
-                            role="menu" aria-labelledby="user-menu-btn">
-                            <a href="../profile.html" class="block px-4 py-2 text-sm hover:bg-gray-50"
-                                role="menuitem">Profile</a>
-                            <a href="../settings.html" class="block px-4 py-2 text-sm hover:bg-gray-50"
-                                role="menuitem">Settings</a>
-                            <a id="logout-link" href="#" class="block px-4 py-2 text-sm hover:bg-gray-50"
-                                role="menuitem">Sign out</a>
+                        <div class="relative" id="user-menu-root">
+                            <button id="user-menu-btn"
+                                class="inline-flex items-center gap-2 rounded-full pl-1 pr-2 py-1 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                                aria-haspopup="menu" aria-expanded="false">
+                                <img id="avatar" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" alt="Avatar"
+                                    class="w-8 h-8 rounded-full bg-gray-200" />
+                                <span id="display-name"
+                                    class="hidden sm:inline text-sm font-medium text-gray-700">User</span>
+                                <i data-feather="chevron-down" class="w-4 h-4 text-gray-500" aria-hidden="true"></i>
+                            </button>
+                            <div id="user-menu"
+                                class="hidden absolute right-0 mt-2 w-48 rounded-md border border-gray-200 bg-white shadow-md"
+                                role="menu" aria-labelledby="user-menu-btn">
+                                <a href="../profile.html" class="block px-4 py-2 text-sm hover:bg-gray-50"
+                                    role="menuitem">Profile</a>
+                                <a href="../settings.html" class="block px-4 py-2 text-sm hover:bg-gray-50"
+                                    role="menuitem">Settings</a>
+                                <a id="logout-link" href="#" class="block px-4 py-2 text-sm hover:bg-gray-50"
+                                    role="menuitem">Sign out</a>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
-    </header>
+        </header>
 
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div class="flex flex-col md:flex-row gap-6">
-            <!-- Left Sidebar -->
-            <aside class="w-full md:w-1/4">
-                <div class="bg-white rounded-lg shadow p-6 mb-6">
-                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Project Summary</h3>
-                    <div class="space-y-4">
-                        <div>
-                            <p class="text-sm text-gray-500 mb-1">Status</p>
-                            <p class="text-sm font-medium">In Progress</p>
-                        </div>
-                        <div>
-                            <p class="text-sm text-gray-500 mb-1">Start Date</p>
-                            <p class="text-sm font-medium">May 1, 2023</p>
-                        </div>
-                        <div>
-                            <p class="text-sm text-gray-500 mb-1">Due Date</p>
-                            <p class="text-sm font-medium">May 25, 2023</p>
-                        </div>
-                        <div>
-                            <p class="text-sm text-gray-500 mb-1">Progress</p>
-                            <div class="w-full bg-gray-200 rounded-full h-2.5">
-                                <div class="bg-blue-600 h-2.5 rounded-full" style="width:45%"></div>
+        <!-- Main page surface -->
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <div class="flex flex-col md:flex-row gap-6">
+                <!-- Left Sidebar -->
+                <aside class="w-full md:w-1/4">
+                    <div class="bg-white rounded-lg shadow p-6 mb-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Project Summary</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <p class="text-sm text-gray-500 mb-1">Status</p>
+                                <p class="text-sm font-medium">In Progress</p>
                             </div>
-                            <p class="text-xs text-gray-500 mt-1">45% complete</p>
+                            <div>
+                                <p class="text-sm text-gray-500 mb-1">Start Date</p>
+                                <p class="text-sm font-medium">May 1, 2023</p>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-500 mb-1">Due Date</p>
+                                <p class="text-sm font-medium">May 25, 2023</p>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-500 mb-1">Progress</p>
+                                <div class="w-full bg-gray-200 rounded-full h-2.5">
+                                    <div class="bg-blue-600 h-2.5 rounded-full" style="width:45%"></div>
+                                </div>
+                                <p class="text-xs text-gray-500 mt-1">45% complete</p>
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                <div class="bg-white rounded-lg shadow p-6">
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-lg font-semibold text-gray-900">Team</h3>
-                        <button class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">
-                            <i data-feather="plus" class="w-4 h-4 mr-1"></i> Invite
-                        </button>
-                    </div>
-                    <ul class="space-y-3">
-                        <li class="flex items-center">
-                            <img src="https://i.pravatar.cc/64?img=1" alt="" class="w-8 h-8 rounded-full mr-3">
-                            <div>
-                                <p class="text-sm font-medium">John Doe</p>
-                                <p class="text-xs text-gray-500">Project Lead</p>
-                            </div>
-                        </li>
-                        <li class="flex items-center">
-                            <img src="https://i.pravatar.cc/64?img=2" alt="" class="w-8 h-8 rounded-full mr-3">
-                            <div>
-                                <p class="text-sm font-medium">Jane Smith</p>
-                                <p class="text-xs text-gray-500">Designer</p>
-                            </div>
-                        </li>
-                        <li class="flex items-center">
-                            <img src="https://i.pravatar.cc/64?img=3" alt="" class="w-8 h-8 rounded-full mr-3">
-                            <div>
-                                <p class="text-sm font-medium">Mike Johnson</p>
-                                <p class="text-xs text-gray-500">Developer</p>
-                            </div>
-                        </li>
-                    </ul>
-                </div>
-            </aside>
-
-            <!-- Main -->
-            <main class="w-full md:w-3/4">
-                <div class="bg-white rounded-lg shadow mb-6">
-                    <div class="border-b border-gray-200">
-                        <div class="flex items-center justify-between px-4 py-3">
-                            <div class="flex items-center">
-                                <a href="../dashboard.html" class="mr-3 text-indigo-600 hover:text-indigo-800"
-                                    aria-label="Back">
-                                    <i data-feather="arrow-left" class="w-5 h-5"></i>
-                                </a>
-                                <h1 class="text-2xl sm:text-xl font-semibold tracking-tight">
-                                    <span id="project-title"
-                                        class="bg-gradient-to-r from-gray-900 via-gray-700 to-gray-900 bg-clip-text text-transparent">
-                                        <!-- hydrated by project.js -->
-                                    </span>
-                                </h1>
-                            </div>
-
-                            <!-- Settings cog aligned right, larger size, hover spin -->
-                            <button id="settings-open" class="group relative rounded-full p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100
-                 focus:outline-none focus:ring-2 focus:ring-indigo-500/50" aria-label="Project settings">
-                                <i data-feather="settings"
-                                    class="w-7 h-7 transition-transform group-hover:animate-spin"></i>
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-semibold text-gray-900">Team</h3>
+                            <button class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">
+                                <i data-feather="plus" class="w-4 h-4 mr-1"></i> Invite
                             </button>
                         </div>
-
-                        <!-- Tabs -->
-                        <div class="flex items-center justify-between px-4 -mb-px">
-                            <!-- Tabs left -->
-                            <nav class="flex overflow-x-auto">
-                                <button data-tab="description"
-                                    class="tab-button py-4 px-6 text-sm font-medium border-b-2 border-indigo-500 text-indigo-600">Description</button>
-                                <button data-tab="steps"
-                                    class="tab-button py-4 px-6 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">Steps</button>
-                                <button data-tab="board"
-                                    class="tab-button py-4 px-6 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">Board</button>
-                                <button data-tab="timeline"
-                                    class="tab-button py-4 px-6 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">Timeline</button>
-                                <button data-tab="files"
-                                    class="tab-button py-4 px-6 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">Files</button>
-                                <button data-tab="activity"
-                                    class="tab-button py-4 px-6 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">Activity</button>
-                            </nav>
-
-                            <!-- Chat right -->
-                            <button id="chat-open" aria-label="Open chat"
-  class="ml-auto relative inline-flex items-center gap-2 rounded-full px-3 py-2 text-gray-600 hover:text-indigo-700
-         focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50
-         transition will-change-transform will-change-auto
-         [box-shadow:0_10px_24px_-12px_rgba(107,114,128,0.35)]
-         motion-safe:hover:scale-105 motion-safe:hover:translate-y-[-1px]
-         motion-safe:hover:[box-shadow:0_18px_36px_-14px_rgba(107,114,128,0.55)]
-         motion-reduce:transform-none motion-reduce:shadow-none">
-  <i data-feather="message-circle" class="w-5 h-5"></i>
-  <span class="hidden sm:inline text-sm font-medium">Chat</span>
-  <span id="chat-unread-dot" class="absolute -top-0.5 -right-0.5 hidden h-2 w-2 rounded-full bg-indigo-500"></span>
-</button>
-
-                        </div>
+                        <ul class="space-y-3">
+                            <li class="flex items-center">
+                                <img src="https://i.pravatar.cc/64?img=1" alt="" class="w-8 h-8 rounded-full mr-3">
+                                <div>
+                                    <p class="text-sm font-medium">John Doe</p>
+                                    <p class="text-xs text-gray-500">Project Lead</p>
+                                </div>
+                            </li>
+                            <li class="flex items-center">
+                                <img src="https://i.pravatar.cc/64?img=2" alt="" class="w-8 h-8 rounded-full mr-3">
+                                <div>
+                                    <p class="text-sm font-medium">Jane Smith</p>
+                                    <p class="text-xs text-gray-500">Designer</p>
+                                </div>
+                            </li>
+                            <li class="flex items-center">
+                                <img src="https://i.pravatar.cc/64?img=3" alt="" class="w-8 h-8 rounded-full mr-3">
+                                <div>
+                                    <p class="text-sm font-medium">Mike Johnson</p>
+                                    <p class="text-xs text-gray-500">Developer</p>
+                                </div>
+                            </li>
+                        </ul>
                     </div>
+                </aside>
 
-                    <!-- Description -->
-                    <section id="description-content" class="tab-content p-4">
-                        <div class="space-y-6">
-                            <div class="bg-white border border-gray-200 rounded-lg p-4">
-                                <!-- <h4 class="text-base font-semibold mb-1">Project Description</h4> -->
-                                <p class="text-sm text-gray-700">Complete redesign of company website with new UI/UX.
-                                </p>
+                <!-- Main -->
+                <main class="w-full md:w-3/4">
+                    <div class="bg-white rounded-lg shadow mb-6">
+                        <div class="border-b border-gray-200">
+                            <div class="flex items-center justify-between px-4 py-3">
+                                <div class="flex items-center">
+                                    <a href="../dashboard.html" class="mr-3 text-indigo-600 hover:text-indigo-800"
+                                        aria-label="Back">
+                                        <i data-feather="arrow-left" class="w-5 h-5"></i>
+                                    </a>
+                                    <h1 class="text-2xl sm:text-xl font-semibold tracking-tight">
+                                        <span id="project-title"
+                                            class="bg-gradient-to-r from-gray-900 via-gray-700 to-gray-900 bg-clip-text text-transparent">
+                                            <!-- hydrated by project.js -->
+                                        </span>
+                                    </h1>
+                                </div>
+
+                                <!-- Settings button -->
+                                <button id="settings-open" class="group relative rounded-full p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100
+                               focus:outline-none focus:ring-2 focus:ring-indigo-500/50" aria-label="Project settings">
+                                    <i data-feather="settings"
+                                        class="w-7 h-7 transition-transform group-hover:animate-spin"></i>
+                                </button>
                             </div>
-                            <div class="bg-white border border-gray-200 rounded-lg p-4">
-                                <div class="flex items-center justify-between mb-2">
-                                    <h4 class="text-base font-semibold">Notes</h4>
-                                    <button
-                                        class="flex items-center px-2 py-1 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700">
-                                        <i data-feather="plus" class="w-4 h-4 mr-1"></i> Add Note
+
+                            <!-- Tabs -->
+                            <div class="flex items-center justify-between px-4 -mb-px">
+                                <nav class="flex overflow-x-auto">
+                                    <button data-tab="description"
+                                        class="tab-button py-4 px-6 text-sm font-medium border-b-2 border-indigo-500 text-indigo-600">Description</button>
+                                    <button data-tab="steps"
+                                        class="tab-button py-4 px-6 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">Steps</button>
+                                    <button data-tab="board"
+                                        class="tab-button py-4 px-6 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">Board</button>
+                                    <button data-tab="timeline"
+                                        class="tab-button py-4 px-6 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">Timeline</button>
+                                    <button data-tab="files"
+                                        class="tab-button py-4 px-6 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">Files</button>
+                                    <button data-tab="activity"
+                                        class="tab-button py-4 px-6 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">Activity</button>
+                                </nav>
+
+                                <!-- Chat -->
+                                <button id="chat-open" aria-label="Open chat" class="ml-auto relative inline-flex items-center gap-2 rounded-full px-3 py-2 text-gray-600 hover:text-indigo-700
+                               focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50
+                               transition will-change-transform will-change-auto
+                               [box-shadow:0_10px_24px_-12px_rgba(107,114,128,0.35)]
+                               motion-safe:hover:scale-105 motion-safe:hover:translate-y-[-1px]
+                               motion-safe:hover:[box-shadow:0_18px_36px_-14px_rgba(107,114,128,0.55)]
+                               motion-reduce:transform-none motion-reduce:shadow-none">
+                                    <i data-feather="message-circle" class="w-5 h-5"></i>
+                                    <span class="hidden sm:inline text-sm font-medium">Chat</span>
+                                    <span id="chat-unread-dot"
+                                        class="absolute -top-0.5 -right-0.5 hidden h-2 w-2 rounded-full bg-indigo-500"></span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Description -->
+                        <section id="description-content" class="tab-content p-4">
+                            <div class="space-y-6">
+                                <div class="bg-white border border-gray-200 rounded-lg p-4">
+                                    <p class="text-sm text-gray-700">Complete redesign of company website with new
+                                        UI/UX.</p>
+                                </div>
+                                <div class="bg-white border border-gray-200 rounded-lg p-4">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <h4 class="text-base font-semibold">Notes</h4>
+                                        <button
+                                            class="flex items-center px-2 py-1 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700">
+                                            <i data-feather="plus" class="w-4 h-4 mr-1"></i> Add Note
+                                        </button>
+                                    </div>
+                                    <div class="bg-white p-3 rounded border border-gray-200">
+                                        <textarea class="w-full h-48 focus:outline-none"
+                                            placeholder="Write description notes here... Markdown is supported."></textarea>
+                                        <div class="flex justify-end mt-2">
+                                            <button
+                                                class="px-3 py-1 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700">Save
+                                                Notes</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- Steps -->
+                        <section id="steps-content" class="tab-content hidden p-4">
+                            <div class="flex justify-between items-center mb-4">
+                                <h4 class="text-lg font-medium">Project Steps</h4>
+                                <button onclick="openAddStepModal()"
+                                    class="flex items-center px-3 py-1 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700">
+                                    <i data-feather="plus" class="w-4 h-4 mr-1"></i> Add Step
+                                </button>
+                            </div>
+                            <div id="steps-tree" class="space-y-2"></div>
+                        </section>
+
+                        <!-- Activity -->
+                        <section id="activity-content" class="tab-content hidden p-4"></section>
+
+                        <!-- Board -->
+                        <section id="board-content" class="tab-content hidden p-4">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                <div class="bg-gray-50 rounded-lg p-3">
+                                    <div class="flex justify-between items-center mb-3">
+                                        <h5 class="font-medium">Backlog</h5>
+                                        <span class="text-xs bg-gray-200 rounded-full px-2 py-1">0</span>
+                                    </div>
+                                    <div id="backlog-column" class="space-y-3 min-h-20"></div>
+                                </div>
+                                <div class="bg-gray-50 rounded-lg p-3">
+                                    <div class="flex justify-between items-center mb-3">
+                                        <h5 class="font-medium">In Progress</h5>
+                                        <span class="text-xs bg-blue-100 text-blue-800 rounded-full px-2 py-1">0</span>
+                                    </div>
+                                    <div id="inprogress-column" class="space-y-3 min-h-20"></div>
+                                </div>
+                                <div class="bg-gray-50 rounded-lg p-3">
+                                    <div class="flex justify-between items-center mb-3">
+                                        <h5 class="font-medium">Review</h5>
+                                        <span
+                                            class="text-xs bg-yellow-100 text-yellow-800 rounded-full px-2 py-1">0</span>
+                                    </div>
+                                    <div id="review-column" class="space-y-3 min-h-20"></div>
+                                </div>
+                                <div class="bg-gray-50 rounded-lg p-3">
+                                    <div class="flex justify-between items-center mb-3">
+                                        <h5 class="font-medium">Done</h5>
+                                        <span
+                                            class="text-xs bg-green-100 text-green-800 rounded-full px-2 py-1">0</span>
+                                    </div>
+                                    <div id="done-column" class="space-y-3 min-h-20"></div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- Timeline -->
+                        <section id="timeline-content" class="tab-content hidden p-4">
+                            <div class="flex justify-between items-center mb-4">
+                                <div>
+                                    <button class="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium"
+                                        aria-label="Prev">
+                                        <i data-feather="chevron-left" class="w-4 h-4"></i>
+                                    </button>
+                                    <span class="mx-2 text-sm font-medium">May 2023</span>
+                                    <button class="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium"
+                                        aria-label="Next">
+                                        <i data-feather="chevron-right" class="w-4 h-4"></i>
                                     </button>
                                 </div>
-                                <div class="bg-white p-3 rounded border border-gray-200">
-                                    <textarea class="w-full h-48 focus:outline-none"
-                                        placeholder="Write description notes here... Markdown is supported."></textarea>
-                                    <div class="flex justify-end mt-2">
-                                        <button
-                                            class="px-3 py-1 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700">Save
-                                            Notes</button>
-                                    </div>
+                                <div class="flex space-x-2">
+                                    <button
+                                        class="px-3 py-1 bg-indigo-600 text-white rounded-md text-sm font-medium">Week</button>
+                                    <button
+                                        class="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium">Month</button>
                                 </div>
                             </div>
-                        </div>
-                    </section>
 
-                    <!-- Steps -->
-                    <section id="steps-content" class="tab-content hidden p-4">
-                        <div class="flex justify-between items-center mb-4">
-                            <h4 class="text-lg font-medium">Project Steps</h4>
-                            <button onclick="openAddStepModal()"
-                                class="flex items-center px-3 py-1 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700">
-                                <i data-feather="plus" class="w-4 h-4 mr-1"></i> Add Step
-                            </button>
-                        </div>
-
-                        <div id="steps-tree" class="space-y-2"></div>
-                    </section>
-
-                    <!-- Activity -->
-                    <section id="activity-content" class="tab-content hidden p-4">
-                        <!-- <div class="bg-white rounded-lg shadow p-6">
-                            <h3 class="text-lg font-semibold text-gray-900 mb-4">Activity</h3>
-                            <div id="activity-live"></div>
-                        </div> -->
-                    </section>
-
-                    <!-- Board -->
-                    <section id="board-content" class="tab-content hidden p-4">
-                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                            <div class="bg-gray-50 rounded-lg p-3">
-                                <div class="flex justify-between items-center mb-3">
-                                    <h5 class="font-medium">Backlog</h5>
-                                    <span class="text-xs bg-gray-200 rounded-full px-2 py-1">0</span>
-                                </div>
-                                <div id="backlog-column" class="space-y-3 min-h-20"></div>
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full">
+                                    <thead>
+                                        <tr>
+                                            <th class="px-2 py-2 text-left text-xs font-medium text-gray-500">Mon</th>
+                                            <th class="px-2 py-2 text-left text-xs font-medium text-gray-500">Tue</th>
+                                            <th class="px-2 py-2 text-left text-xs font-medium text-gray-500">Wed</th>
+                                            <th class="px-2 py-2 text-left text-xs font-medium text-gray-500">Thu</th>
+                                            <th class="px-2 py-2 text-left text-xs font-medium text-gray-500">Fri</th>
+                                            <th class="px-2 py-2 text-left text-xs font-medium text-gray-500">Sat</th>
+                                            <th class="px-2 py-2 text-left text-xs font-medium text-gray-500">Sun</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td class="p-2 border border-gray-200">
+                                                <div class="text-xs text-gray-500 mb-1">1</div>
+                                                <div class="status-done text-xs px-1 py-0.5 rounded mb-1">Project
+                                                    kickoff</div>
+                                            </td>
+                                            <td class="p-2 border border-gray-200">
+                                                <div class="text-xs text-gray-500 mb-1">2</div>
+                                            </td>
+                                            <td class="p-2 border border-gray-200">
+                                                <div class="text-xs text-gray-500 mb-1">3</div>
+                                                <div class="status-todo text-xs px-1 py-0.5 rounded mb-1">Research
+                                                    starts</div>
+                                            </td>
+                                            <td class="p-2 border border-gray-200">
+                                                <div class="text-xs text-gray-500 mb-1">4</div>
+                                            </td>
+                                            <td class="p-2 border border-gray-200">
+                                                <div class="text-xs text-gray-500 mb-1">5</div>
+                                                <div class="status-inprogress text-xs px-1 py-0.5 rounded mb-1">
+                                                    Competitor analysis</div>
+                                            </td>
+                                            <td class="p-2 border border-gray-200">
+                                                <div class="text-xs text-gray-500 mb-1">6</div>
+                                            </td>
+                                            <td class="p-2 border border-gray-200">
+                                                <div class="text-xs text-gray-500 mb-1">7</div>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="p-2 border border-gray-200">
+                                                <div class="text-xs text-gray-500 mb-1">8</div>
+                                            </td>
+                                            <td class="p-2 border border-gray-200">
+                                                <div class="text-xs text-gray-500 mb-1">9</div>
+                                            </td>
+                                            <td class="p-2 border border-gray-200">
+                                                <div class="text-xs text-gray-500 mb-1">10</div>
+                                                <div class="status-todo text-xs px-1 py-0.5 rounded mb-1">Wireframes due
+                                                </div>
+                                            </td>
+                                            <td class="p-2 border border-gray-200">
+                                                <div class="text-xs text-gray-500 mb-1">11</div>
+                                            </td>
+                                            <td class="p-2 border border-gray-200">
+                                                <div class="text-xs text-gray-500 mb-1">12</div>
+                                            </td>
+                                            <td class="p-2 border border-gray-200">
+                                                <div class="text-xs text-gray-500 mb-1">13</div>
+                                            </td>
+                                            <td class="p-2 border border-gray-200">
+                                                <div class="text-xs text-gray-500 mb-1">14</div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
                             </div>
-                            <div class="bg-gray-50 rounded-lg p-3">
-                                <div class="flex justify-between items-center mb-3">
-                                    <h5 class="font-medium">In Progress</h5>
-                                    <span class="text-xs bg-blue-100 text-blue-800 rounded-full px-2 py-1">0</span>
-                                </div>
-                                <div id="inprogress-column" class="space-y-3 min-h-20"></div>
-                            </div>
-                            <div class="bg-gray-50 rounded-lg p-3">
-                                <div class="flex justify-between items-center mb-3">
-                                    <h5 class="font-medium">Review</h5>
-                                    <span class="text-xs bg-yellow-100 text-yellow-800 rounded-full px-2 py-1">0</span>
-                                </div>
-                                <div id="review-column" class="space-y-3 min-h-20"></div>
-                            </div>
-                            <div class="bg-gray-50 rounded-lg p-3">
-                                <div class="flex justify-between items-center mb-3">
-                                    <h5 class="font-medium">Done</h5>
-                                    <span class="text-xs bg-green-100 text-green-800 rounded-full px-2 py-1">0</span>
-                                </div>
-                                <div id="done-column" class="space-y-3 min-h-20"></div>
-                            </div>
-                        </div>
-                    </section>
+                        </section>
 
-                    <!-- Timeline -->
-                    <section id="timeline-content" class="tab-content hidden p-4">
-                        <div class="flex justify-between items-center mb-4">
-                            <div>
-                                <button class="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium"
-                                    aria-label="Prev">
-                                    <i data-feather="chevron-left" class="w-4 h-4"></i>
+                        <!-- Files -->
+                        <section id="files-content" class="tab-content hidden p-4">
+                            <div class="flex justify-between items-center mb-4">
+                                <h4 class="text-lg font-medium">Project Files</h4>
+                                <button onclick="openBulkImportModal()"
+                                    class="flex items-center px-3 py-1 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700">
+                                    <i data-feather="upload" class="w-4 h-4 mr-1"></i> Bulk Import
                                 </button>
-                                <span class="mx-2 text-sm font-medium">May 2023</span>
-                                <button class="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium"
-                                    aria-label="Next">
-                                    <i data-feather="chevron-right" class="w-4 h-4"></i>
-                                </button>
                             </div>
-                            <div class="flex space-x-2">
-                                <button
-                                    class="px-3 py-1 bg-indigo-600 text-white rounded-md text-sm font-medium">Week</button>
-                                <button
-                                    class="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium">Month</button>
+                            <div id="file-dropzone"
+                                class="file-dropzone border-2 border-dashed rounded-lg p-8 text-center mb-4 cursor-pointer">
+                                <i data-feather="upload" class="w-8 h-8 mx-auto text-gray-400 mb-2"></i>
+                                <p class="text-sm text-gray-600 mb-1">Drag & drop files here or click to browse</p>
+                                <p class="text-xs text-gray-500">Max file size: 50MB</p>
+                                <input id="file-input" type="file" class="hidden" multiple />
                             </div>
-                        </div>
-
-                        <div class="overflow-x-auto">
-                            <table class="min-w-full">
-                                <thead>
-                                    <tr>
-                                        <th class="px-2 py-2 text-left text-xs font-medium text-gray-500">Mon</th>
-                                        <th class="px-2 py-2 text-left text-xs font-medium text-gray-500">Tue</th>
-                                        <th class="px-2 py-2 text-left text-xs font-medium text-gray-500">Wed</th>
-                                        <th class="px-2 py-2 text-left text-xs font-medium text-gray-500">Thu</th>
-                                        <th class="px-2 py-2 text-left text-xs font-medium text-gray-500">Fri</th>
-                                        <th class="px-2 py-2 text-left text-xs font-medium text-gray-500">Sat</th>
-                                        <th class="px-2 py-2 text-left text-xs font-medium text-gray-500">Sun</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td class="p-2 border border-gray-200">
-                                            <div class="text-xs text-gray-500 mb-1">1</div>
-                                            <div class="status-done text-xs px-1 py-0.5 rounded mb-1">Project kickoff
-                                            </div>
-                                        </td>
-                                        <td class="p-2 border border-gray-200">
-                                            <div class="text-xs text-gray-500 mb-1">2</div>
-                                        </td>
-                                        <td class="p-2 border border-gray-200">
-                                            <div class="text-xs text-gray-500 mb-1">3</div>
-                                            <div class="status-todo text-xs px-1 py-0.5 rounded mb-1">Research starts
-                                            </div>
-                                        </td>
-                                        <td class="p-2 border border-gray-200">
-                                            <div class="text-xs text-gray-500 mb-1">4</div>
-                                        </td>
-                                        <td class="p-2 border border-gray-200">
-                                            <div class="text-xs text-gray-500 mb-1">5</div>
-                                            <div class="status-inprogress text-xs px-1 py-0.5 rounded mb-1">Competitor
-                                                analysis</div>
-                                        </td>
-                                        <td class="p-2 border border-gray-200">
-                                            <div class="text-xs text-gray-500 mb-1">6</div>
-                                        </td>
-                                        <td class="p-2 border border-gray-200">
-                                            <div class="text-xs text-gray-500 mb-1">7</div>
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td class="p-2 border border-gray-200">
-                                            <div class="text-xs text-gray-500 mb-1">8</div>
-                                        </td>
-                                        <td class="p-2 border border-gray-200">
-                                            <div class="text-xs text-gray-500 mb-1">9</div>
-                                        </td>
-                                        <td class="p-2 border border-gray-200">
-                                            <div class="text-xs text-gray-500 mb-1">10</div>
-                                            <div class="status-todo text-xs px-1 py-0.5 rounded mb-1">Wireframes due
-                                            </div>
-                                        </td>
-                                        <td class="p-2 border border-gray-200">
-                                            <div class="text-xs text-gray-500 mb-1">11</div>
-                                        </td>
-                                        <td class="p-2 border border-gray-200">
-                                            <div class="text-xs text-gray-500 mb-1">12</div>
-                                        </td>
-                                        <td class="p-2 border border-gray-200">
-                                            <div class="text-xs text-gray-500 mb-1">13</div>
-                                        </td>
-                                        <td class="p-2 border border-gray-200">
-                                            <div class="text-xs text-gray-500 mb-1">14</div>
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </section>
-
-                    <!-- Files -->
-                    <section id="files-content" class="tab-content hidden p-4">
-                        <div class="flex justify-between items-center mb-4">
-                            <h4 class="text-lg font-medium">Project Files</h4>
-                            <button onclick="openBulkImportModal()"
-                                class="flex items-center px-3 py-1 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700">
-                                <i data-feather="upload" class="w-4 h-4 mr-1"></i> Bulk Import
-                            </button>
-                        </div>
-                        <div id="file-dropzone"
-                            class="file-dropzone border-2 border-dashed rounded-lg p-8 text-center mb-4 cursor-pointer">
-                            <i data-feather="upload" class="w-8 h-8 mx-auto text-gray-400 mb-2"></i>
-                            <p class="text-sm text-gray-600 mb-1">Drag & drop files here or click to browse</p>
-                            <p class="text-xs text-gray-500">Max file size: 50MB</p>
-                            <input id="file-input" type="file" class="hidden" multiple />
-                        </div>
-                        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
-                            <div class="border-b border-gray-200 px-4 py-3 font-medium text-sm">Recent Files</div>
-                            <div class="divide-y divide-gray-200" id="files-list">
-                                <div class="p-3 flex items-center">
-                                    <i data-feather="file" class="w-5 h-5 text-gray-400 mr-3"></i>
-                                    <div class="flex-grow">
-                                        <p class="text-sm font-medium">Competitor Analysis.pdf</p>
-                                        <p class="text-xs text-gray-500">Uploaded May 2 by Jane Smith</p>
+                            <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                                <div class="border-b border-gray-200 px-4 py-3 font-medium text-sm">Recent Files</div>
+                                <div class="divide-y divide-gray-200" id="files-list">
+                                    <div class="p-3 flex items-center">
+                                        <i data-feather="file" class="w-5 h-5 text-gray-400 mr-3"></i>
+                                        <div class="flex-grow">
+                                            <p class="text-sm font-medium">Competitor Analysis.pdf</p>
+                                            <p class="text-xs text-gray-500">Uploaded May 2 by Jane Smith</p>
+                                        </div>
+                                        <button class="text-gray-400 hover:text-indigo-600"><i
+                                                data-feather="more-vertical" class="w-4 h-4"></i></button>
                                     </div>
-                                    <button class="text-gray-400 hover:text-indigo-600"><i data-feather="more-vertical"
-                                            class="w-4 h-4"></i></button>
-                                </div>
-                                <div class="p-3 flex items-center">
-                                    <i data-feather="image" class="w-5 h-5 text-blue-400 mr-3"></i>
-                                    <div class="flex-grow">
-                                        <p class="text-sm font-medium">Wireframe-v1.png</p>
-                                        <p class="text-xs text-gray-500">Uploaded May 1 by John Doe</p>
+                                    <div class="p-3 flex items-center">
+                                        <i data-feather="image" class="w-5 h-5 text-blue-400 mr-3"></i>
+                                        <div class="flex-grow">
+                                            <p class="text-sm font-medium">Wireframe-v1.png</p>
+                                            <p class="text-xs text-gray-500">Uploaded May 1 by John Doe</p>
+                                        </div>
+                                        <button class="text-gray-400 hover:text-indigo-600"><i
+                                                data-feather="more-vertical" class="w-4 h-4"></i></button>
                                     </div>
-                                    <button class="text-gray-400 hover:text-indigo-600"><i data-feather="more-vertical"
-                                            class="w-4 h-4"></i></button>
                                 </div>
                             </div>
-                        </div>
-                    </section>
-                </div>
-            </main>
+                        </section>
+                    </div>
+                </main>
+            </div>
         </div>
-    </div>
+    </div><!-- /.app-surface -->
 
     <!-- Add/Edit Step Modal -->
     <div id="step-modal" class="fixed inset-0 z-50 hidden overflow-y-auto">
         <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center">
             <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onclick="closeStepModal()"></div>
             <div
-                class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:align-middle sm:max-w-lg sm:w-full">
+                class="inline-block align-bottom modal-surface rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:align-middle sm:max-w-lg sm:w-full">
                 <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                     <h3 class="text-lg font-medium text-gray-900 mb-4" id="modal-title">Add New Step</h3>
                     <div class="space-y-4">
@@ -589,18 +584,13 @@
                 </div>
                 <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
                     <button type="button"
-                        class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 sm:ml-3 sm:w-auto sm:text-sm">
-                        Save
-                    </button>
+                        class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 sm:ml-3 sm:w-auto sm:text-sm">Save</button>
                     <button type="button" onclick="closeStepModal()"
-                        class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
-                        Cancel
-                    </button>
+                        class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">Cancel</button>
                 </div>
             </div>
         </div>
     </div>
-
 
     <!-- Files: Bulk Import Modal -->
     <div id="bulk-import-modal" class="fixed inset-0 z-50 hidden overflow-y-auto">
@@ -608,7 +598,7 @@
             <div class="fixed inset-0 bg-black/40 backdrop-blur-sm supports-[backdrop-filter]:backdrop-blur-sm transition-opacity"
                 onclick="closeBulkImportModal()"></div>
             <div
-                class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:align-middle sm:max-w-xl sm:w-full">
+                class="inline-block align-bottom modal-surface rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:align-middle sm:max-w-xl sm:w-full">
                 <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                     <h3 class="text-lg font-medium text-gray-900 mb-4">Bulk Import Files</h3>
                     <p class="text-sm text-gray-600 mb-3">Paste file names (one per line) or drag files into Files tab.
@@ -623,7 +613,7 @@ Copy.docx"></textarea>
                     <button type="button"
                         class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 sm:ml-3 sm:w-auto sm:text-sm"
                         onclick="closeBulkImportModal()">Import</button>
-                    <button type="button" onclick="closeBulkImportModal()"
+                    <button type="button" onclick="closeBulkImportModal"
                         class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">Cancel</button>
                 </div>
             </div>
@@ -636,7 +626,7 @@ Copy.docx"></textarea>
             <div class="fixed inset-0 bg-black/40 backdrop-blur-sm supports-[backdrop-filter]:backdrop-blur-sm transition-opacity"
                 onclick="closeCommentsModal()"></div>
             <div
-                class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:align-middle sm:max-w-lg sm:w-full">
+                class="inline-block align-bottom modal-surface rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:align-middle sm:max-w-lg sm:w-full">
                 <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                     <h3 class="text-lg font-medium text-gray-900 mb-4">Comments</h3>
                     <div class="space-y-4">
@@ -683,7 +673,7 @@ Copy.docx"></textarea>
         <div class="absolute inset-0 bg-black/40 backdrop-blur-sm supports-[backdrop-filter]:backdrop-blur-sm"
             onclick="closeSettingsModal()"></div>
         <div
-            class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-xl overflow-hidden w-[95vw] max-w-6xl h-[88vh] flex flex-col">
+            class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-lg shadow-xl overflow-hidden w-[95vw] max-w-6xl h-[88vh] flex flex-col modal-surface">
             <div class="flex items-center justify-between px-3 py-2 border-b">
                 <div class="text-sm font-medium">Project Settings</div>
                 <button class="p-2 rounded hover:bg-gray-100" onclick="closeSettingsModal()"><i data-feather="x"
@@ -699,7 +689,7 @@ Copy.docx"></textarea>
         <div class="absolute inset-0 bg-black/40 backdrop-blur-sm supports-[backdrop-filter]:backdrop-blur-sm"
             onclick="closeChatModal()"></div>
         <div
-            class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-xl overflow-hidden w-[95vw] max-w-5xl h-[80vh] flex flex-col">
+            class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-lg shadow-xl overflow-hidden w-[95vw] max-w-5xl h-[80vh] flex flex-col modal-surface">
             <div class="flex items-center justify-between px-3 py-2 border-b">
                 <div class="text-sm font-medium">Project Chat</div>
                 <button class="p-2 rounded hover:bg-gray-100" onclick="closeChatModal()"><i data-feather="x"
@@ -718,7 +708,6 @@ Copy.docx"></textarea>
 
         /* Tabs */
         (function tabs() {
-            // Bind only real tabs. Ignore buttons without data-tab (e.g., Chat).
             const buttons = [...document.querySelectorAll('.tab-button[data-tab]')];
             const sections = {
                 description: document.getElementById('description-content'),
@@ -749,7 +738,7 @@ Copy.docx"></textarea>
             document.querySelectorAll('.status-select').forEach(sel => { apply(sel); sel.addEventListener('change', () => apply(sel)); });
         })();
 
-        /* Flatpickr (Monday-first) */
+        /* Flatpickr */
         (function datepickers() {
             const opts = { dateFormat: 'Y-m-d', weekNumbers: true, locale: { firstDayOfWeek: 1 } };
             document.querySelectorAll('[data-datepicker]').forEach(inp => flatpickr(inp, opts));
@@ -763,9 +752,7 @@ Copy.docx"></textarea>
             const toggleHover = on => dz.classList.toggle('active', on);
             dz.addEventListener('click', () => input.click());
             dz.addEventListener('dragover', e => { e.preventDefault(); toggleHover(true); });
-            ['dragleave', 'drop'].forEach(evt => {
-                dz.addEventListener(evt, e => { e.preventDefault(); e.stopPropagation(); toggleHover(false); });
-            });
+            ['dragleave', 'drop'].forEach(evt => dz.addEventListener(evt, e => { e.preventDefault(); e.stopPropagation(); toggleHover(false); }));
             dz.addEventListener('drop', e => {
                 const files = e.dataTransfer.files; if (!files || !files.length) return;
                 const list = document.getElementById('files-list');
@@ -784,15 +771,6 @@ Copy.docx"></textarea>
             });
         })();
 
-        /* Board drag & drop */
-        // (function boardDnD() {
-        //     ['backlog', 'inprogress', 'review', 'done'].forEach(id => {
-        //         const el = document.getElementById(`${id}-column`);
-        //         if (!el) return;
-        //         new Sortable(el, { group: 'board', animation: 150, ghostClass: 'opacity-50' });
-        //     });
-        // })();
-
         /* Modals */
         function openAddStepModal() { lockScroll(); document.getElementById('step-modal').classList.remove('hidden'); }
         function closeStepModal() { unlockScroll(); document.getElementById('step-modal').classList.add('hidden'); }
@@ -810,16 +788,13 @@ Copy.docx"></textarea>
             const id = qs.get('id') || '';
             if (!btn || !modal || !frame) return;
             btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
+                e.preventDefault(); e.stopPropagation();
                 frame.src = `/projects/settings.html?id=${encodeURIComponent(id)}`;
-                lockScroll();
-                modal.classList.remove('hidden');
+                lockScroll(); modal.classList.remove('hidden');
             });
         })();
         function closeSettingsModal() { unlockScroll(); document.getElementById('settings-modal')?.classList.add('hidden'); }
 
-        /* Chat modal (iframe) */
         /* Chat modal (iframe) */
         (function chatModal() {
             const btn = document.getElementById('chat-open');
@@ -829,11 +804,9 @@ Copy.docx"></textarea>
             const id = qs.get('id') || '';
             if (!btn || !modal || !frame) return;
             btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
+                e.preventDefault(); e.stopPropagation();
                 frame.src = `/projects/chat.html?id=${encodeURIComponent(id)}`;
-                lockScroll();
-                modal.classList.remove('hidden');
+                lockScroll(); modal.classList.remove('hidden');
             });
         })();
         function closeChatModal() { unlockScroll(); document.getElementById('chat-modal')?.classList.add('hidden'); }
@@ -846,9 +819,77 @@ Copy.docx"></textarea>
     <script type="module" src="/js/supabase.js"></script>
     <script type="module" src="/js/header.js"></script>
     <script type="module" src="/js/api.js"></script>
-    <script type="module" src="/js/project.js"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 
+    <!-- Background hydration and live updates -->
+    <script type="module">
+        import { getProject, getSignedFileURL } from '/js/api.js';
+
+        const qs = new URLSearchParams(location.search);
+        const projectId = qs.get('id') || qs.get('projectId') || qs.get('p') || '';
+        const surface = document.getElementById('app-surface');
+
+        async function applyProjectBackground({ color = null, path = null, url = null } = {}) {
+            if (color) {
+                document.documentElement.style.setProperty('--project-bg', color);
+                surface.style.backgroundImage = '';
+                return;
+            }
+            if (url) {
+                surface.style.backgroundImage = `url("${url}")`;
+                document.documentElement.style.setProperty('--project-bg', '#f9fafb');
+                return;
+            }
+            if (path) {
+                try {
+                    const signed = await getSignedFileURL('project-backgrounds', path);
+                    if (signed) {
+                        surface.style.backgroundImage = `url("${signed}")`;
+                        document.documentElement.style.setProperty('--project-bg', '#f9fafb');
+                    } else {
+                        surface.style.backgroundImage = '';
+                    }
+                } catch {
+                    surface.style.backgroundImage = '';
+                }
+                return;
+            }
+            surface.style.backgroundImage = '';
+            document.documentElement.style.setProperty('--project-bg', '#f9fafb');
+        }
+
+        async function hydrateBackground() {
+            if (!projectId) return;
+            try {
+                const p = await getProject(projectId);
+                await applyProjectBackground({
+                    color: p?.background_color || null,
+                    path: p?.background || null
+                });
+            } catch { }
+        }
+
+        // Only same-origin messages are accepted.
+        window.addEventListener('message', async (event) => {
+            if (event.origin !== location.origin) return;
+            const { type, projectId: pid, payload = {} } = event.data || {};
+            if (pid && pid !== projectId) return;
+
+            if (type === 'preview:bg-color') { await applyProjectBackground({ color: payload.color || null }); return; }
+            if (type === 'preview:bg-image') { await applyProjectBackground({ url: payload.url || null }); return; }
+            if (type === 'preview:bg-clear') { await applyProjectBackground({}); return; }
+            if (type === 'project-bg-commit') {
+                await applyProjectBackground({ color: payload.color || null, path: payload.path || null });
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', hydrateBackground);
+    </script>
+
+
+
+    <!-- Sortable then project.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+    <script type="module" src="/js/project.js"></script>
 </body>
 
 </html>

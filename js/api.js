@@ -29,7 +29,7 @@ export async function getProfile(userId) {
 export async function getProject(projectId) {
   const { data, error } = await supabase
     .from('projects')
-    .select('id,title,description,background,due_date,created_by,updated_at')
+    .select('id,title,description,background,background_color,start_date,due_date,created_by,updated_at')
     .eq('id', projectId)
     .maybeSingle();
   if (error) throw error;
@@ -56,29 +56,27 @@ export async function updateProject(projectId, patch) {
   const safe = {
     ...(patch.title !== undefined ? { title: patch.title } : {}),
     ...(patch.description !== undefined ? { description: patch.description } : {}),
+    ...(patch.start_date !== undefined ? { start_date: patch.start_date } : {}),
     ...(patch.due_date !== undefined ? { due_date: patch.due_date } : {}),
+    ...(patch.background_color !== undefined ? { background_color: patch.background_color } : {}),
     updated_at: nowISO()
   };
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from('projects')
-    .update(safe)
-    .eq('id', projectId)
-    .select('id,title,description,due_date,updated_at')
-    .single();
+    .update(safe, { returning: 'minimal' })
+    .eq('id', projectId);
   if (error) throw error;
-  return data;
+  return { id: projectId, ...safe };
 }
 
 /* Background path is stored in projects.background. */
 export async function setProjectBackground(projectId, storagePath) {
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from('projects')
-    .update({ background: storagePath, updated_at: nowISO() })
-    .eq('id', projectId)
-    .select('id,background,updated_at')
-    .single();
+    .update({ background: storagePath, updated_at: nowISO() }, { returning: 'minimal' })
+    .eq('id', projectId);
   if (error) throw error;
-  return data;
+  return { id: projectId, background: storagePath };
 }
 
 export function signFilePath(bucket, path, expires = 3600) {
@@ -92,6 +90,7 @@ export async function listSteps(projectId) {
     .select('id,project_id,parent_id,name,notes,status,due_date,order_num,idx,assigned_to,created_at,updated_at')
     .eq('project_id', projectId)
     .is('deleted_at', null)
+    .order('parent_id', { ascending: true, nullsFirst: true })
     .order('order_num', { ascending: true });
   if (error) throw error;
   return data || [];
@@ -152,28 +151,30 @@ export async function deleteStep(stepId) {
   return data;
 }
 
-/* RLS-safe list reordering helper (kept for Steps tab; Board never calls it). */
+/* RLS-safe list reordering helper. */
 export async function reorderSteps(projectId, ordered) {
   const items = Array.isArray(ordered) && ordered.length
     ? (typeof ordered[0] === 'string'
-       ? ordered.map((id, i) => ({ id, order_num: i + 1 }))
-       : ordered.map(o => ({ id: o.id, order_num: o.order_num }))
-      )
+      ? ordered.map((id, i) => ({ id, order_num: i + 1 }))
+      : ordered.map(o => ({ id: o.id, order_num: o.order_num, parent_id: o.parent_id }))
+    )
     : [];
   if (!items.length) return [];
 
-  const tasks = items.map(({ id, order_num }) =>
+  const tasks = items.map(({ id, order_num, parent_id }) =>
     supabase.from('steps')
-      .update({ order_num, updated_at: nowISO() })
+      .update({
+        order_num,
+        ...(parent_id !== undefined ? { parent_id } : {}),
+        updated_at: nowISO()
+      }, { returning: 'minimal' })
       .eq('id', id)
       .eq('project_id', projectId)
-      .select('id,order_num')
-      .single()
   );
   const results = await Promise.allSettled(tasks);
   const firstErr = results.find(r => r.status === 'rejected');
   if (firstErr) throw firstErr.reason;
-  return results.filter(r => r.status === 'fulfilled').map(r => r.value.data);
+  return items;
 }
 
 export function subscribeSteps(projectId, callback) {
@@ -251,27 +252,64 @@ export async function getSignedFileURL(bucket, path, expiresInSeconds = 3600) {
 /* ========== Members & Invites ========== */
 export function canWriteRole(role) { return canWrite(role); }
 
-export async function listProjectMembers(projectId) {
+// Helper: load profiles in bulk
+export async function fetchProfilesMap(userIds = []) {
+  const ids = Array.from(new Set(userIds)).filter(Boolean);
+  if (!ids.length) return new Map();
   const { data, error } = await supabase
-    .from('project_members')
-    .select('user_id,role,status,created_at,removed_at,profiles:profiles!project_members_user_id_fkey(id,email,display_name,avatar_path)')
-    .eq('project_id', projectId)
-    .is('deleted_at', null)
-    .order('created_at', { ascending: true });
+    .from('profiles')
+    .select('id,display_name,avatar_path,email')
+    .in('id', ids);
   if (error) throw error;
-  return (data || []).map(r => ({
+  const m = new Map();
+  for (const r of data || []) {
+    m.set(r.id, {
+      name: r.display_name || r.email || 'User',
+      avatar: r.avatar_path || '',
+      email: r.email || ''
+    });
+  }
+  return m;
+}
+
+export async function listProjectMembers(projectId) {
+  // Prefer view if present. Fall back to base table with status filter.
+  let rows = [];
+  let usedView = true;
+  let res = await supabase
+    .from('v_project_members_active')
+    .select('user_id,role,status,created_at,removed_at')
+    .eq('project_id', projectId);
+  if (res.error) { usedView = false; }
+  if (!res.error) rows = res.data || [];
+  if (!usedView) {
+    const { data, error } = await supabase
+      .from('project_members')
+      .select('user_id,role,status,created_at,removed_at')
+      .eq('project_id', projectId)
+      .eq('status', 'active');
+    if (error) throw error;
+    rows = data || [];
+  }
+  const ids = rows.map(r => r.user_id);
+  const profiles = await fetchProfilesMap(ids);
+  return rows.map(r => ({
     user_id: r.user_id,
     role: r.role,
     status: r.status,
     created_at: r.created_at,
     removed_at: r.removed_at,
-    profile: r.profiles
+    profile: {
+      display_name: profiles.get(r.user_id)?.name || '',
+      email: profiles.get(r.user_id)?.email || '',
+      avatar_path: profiles.get(r.user_id)?.avatar || ''
+    }
   }));
 }
 
 export async function listProjectInvites(projectId) {
   const { data, error } = await supabase
-    .from('project_invites')
+    .from('project_member_invites')
     .select('id,email,role,status,created_at,token')
     .eq('project_id', projectId)
     .order('created_at', { ascending: true });
@@ -292,8 +330,8 @@ export async function inviteMemberByEmail(projectId, email, role = 'member') {
   if (!uid) throw new Error('Not authenticated');
 
   const { data, error } = await supabase
-    .from('project_invites')
-    .insert({ project_id: projectId, email, role, token, created_by: uid })
+    .from('project_member_invites')
+    .insert({ project_id: projectId, email, role, token, invited_by: uid })
     .select('id,email,role,status,created_at,token')
     .single();
   if (error) throw error;
@@ -303,33 +341,29 @@ export async function inviteMemberByEmail(projectId, email, role = 'member') {
 }
 
 export async function updateMemberRole(projectId, userId, role) {
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from('project_members')
-    .update({ role })
+    .update({ role, updated_at: nowISO() }, { returning: 'minimal' })
     .eq('project_id', projectId)
-    .eq('user_id', userId)
-    .select('user_id,role')
-    .single();
+    .eq('user_id', userId);
   if (error) throw error;
-  return data;
+  return { user_id: userId, role };
 }
 
 export async function removeMember(projectId, userId) {
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from('project_members')
-    .update({ status: 'removed', removed_at: nowISO() })
+    .update({ status: 'removed', removed_at: nowISO(), updated_at: nowISO() }, { returning: 'minimal' })
     .eq('project_id', projectId)
-    .eq('user_id', userId)
-    .select('user_id,status,removed_at')
-    .single();
+    .eq('user_id', userId);
   if (error) throw error;
-  return data;
+  return { user_id: userId, status: 'removed' };
 }
 
 export async function acceptInvite(projectId, token) {
   const cli = supabase._withHeaders({ 'x-invite-token': token });
   const { data: invite, error: e1 } = await cli
-    .from('project_invites')
+    .from('project_member_invites')
     .select('id,email,role,status')
     .eq('project_id', projectId)
     .eq('token', token)
@@ -343,12 +377,12 @@ export async function acceptInvite(projectId, token) {
 
   const { error: e2 } = await supabase
     .from('project_members')
-    .insert({ project_id: projectId, user_id: uid, role: invite.role, status: 'active' });
+    .insert({ project_id: projectId, user_id: uid, role: invite.role, status: 'active' }, { returning: 'minimal' });
   if (e2 && !String(e2.message || '').includes('duplicate')) throw e2;
 
   const { error: e3 } = await supabase
-    .from('project_invites')
-    .update({ status: 'accepted', accepted_at: nowISO() })
+    .from('project_member_invites')
+    .update({ status: 'accepted', accepted_at: nowISO() }, { returning: 'minimal' })
     .eq('id', invite.id);
   if (e3) throw e3;
 
@@ -372,27 +406,9 @@ export function subscribeActivities(projectId, onEvent) {
     .channel(`activities:${projectId}`)
     .on('postgres_changes',
       { event: '*', schema: 'public', table: 'activities', filter: `project_id=eq.${projectId}` },
-      (_payload) => { try { onEvent(); } catch {} })
+      (_payload) => { try { onEvent(); } catch { } })
     .subscribe();
   return () => supabase.removeChannel(ch);
-}
-
-export async function fetchProfilesMap(userIds = []) {
-  const ids = Array.from(new Set(userIds)).filter(Boolean);
-  if (!ids.length) return new Map();
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('id,display_name,avatar_path,email')
-    .in('id', ids);
-  if (error) throw error;
-  const m = new Map();
-  for (const r of data || []) {
-    m.set(r.id, {
-      name: r.display_name || r.email || 'User',
-      avatar: r.avatar_path || ''
-    });
-  }
-  return m;
 }
 
 export async function fetchStepsMap(stepIds = []) {
@@ -406,4 +422,32 @@ export async function fetchStepsMap(stepIds = []) {
   const m = new Map();
   for (const r of data || []) m.set(r.id, r.name || '');
   return m;
+}
+
+export async function softDeleteProject(projectId) {
+  const { error } = await supabase
+    .from('projects')
+    .update({ deleted_at: new Date().toISOString() }, { returning: 'minimal' })
+    .eq('id', projectId);
+  if (error) {
+    const fb = await supabase
+      .from('projects')
+      .update({ is_deleted: true }, { returning: 'minimal' })
+      .eq('id', projectId);
+    if (fb.error) throw fb.error;
+    return { id: projectId, is_deleted: true };
+  }
+  return { id: projectId, deleted_at: nowISO() };
+}
+
+// Upload only (no DB row in public.files). Used for project backgrounds.
+export async function uploadBackgroundFile(projectId, file) {
+  const ext = file.name.split('.').pop();
+  const id = crypto.randomUUID();
+  const path = `${projectId}/${id}.${ext}`;
+  const { error } = await supabase.storage
+    .from('project-backgrounds')
+    .upload(path, file, { upsert: false, contentType: file.type });
+  if (error) throw error;
+  return { path };
 }

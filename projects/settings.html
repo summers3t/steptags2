@@ -6,92 +6,38 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Project Settings · StepTags Pro</title>
-    <!--
-    Placeholders:
-    - Data is mocked; wire to backend later.
-    - Delete performs confirm() only.
-    - Save/Cancel toggle via dirty-state tracker.
-    - When embedded in an <iframe> modal, this page still works.
-  -->
     <link href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/feather-icons@4.29.2/dist/feather.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <style>
         body {
-            font-family: Inter, system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif
-        }
-
-        .gradient-text {
-            background: linear-gradient(90deg, #3b82f6, #8b5cf6);
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent
+            font-family: Inter, system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
         }
 
         .save-button:disabled {
             opacity: .6;
-            cursor: not-allowed
+            cursor: not-allowed;
         }
 
         .circle-bg {
-            background: linear-gradient(135deg, #3b82f6, #8b5cf6)
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
         }
 
         @media (prefers-reduced-motion:no-preference) {
             .btn-trans {
-                transition: background-color .2s, box-shadow .2s, transform .15s
+                transition: background-color .2s, box-shadow .2s, transform .15s;
             }
 
             .btn-trans:hover {
-                transform: translateY(-1px)
+                transform: translateY(-1px);
             }
         }
     </style>
 </head>
 
-<body class="bg-gray-50 text-gray-900 antialiased">
-    <!-- Shared header -->
-    <header
-        class="bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/60 sticky top-0 z-40 border-b border-gray-100">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="h-16 flex items-center justify-between">
-                <a href="../dashboard.html" class="flex items-center gap-2">
-                    <span class="inline-flex items-center justify-center rounded-xl bg-indigo-50 p-2">
-                        <i data-feather="tag" class="w-5 h-5 text-indigo-600" aria-hidden="true"></i>
-                    </span>
-                    <span class="text-xl font-bold">StepTags <span class="gradient-text">Pro</span></span>
-                </a>
-                <div class="flex items-center gap-2">
-                    <button
-                        class="relative rounded-full p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
-                        aria-label="Notifications">
-                        <i data-feather="bell" class="w-5 h-5" aria-hidden="true"></i>
-                        <span class="absolute -top-0.5 -right-0.5 inline-flex h-2 w-2 rounded-full bg-red-500"></span>
-                    </button>
-                    <div class="relative" id="user-menu-root">
-                        <button id="user-menu-btn"
-                            class="inline-flex items-center gap-2 rounded-full pl-1 pr-2 py-1 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 btn-trans"
-                            aria-haspopup="menu" aria-expanded="false">
-                            <img src="https://i.pravatar.cc/64?img=42" alt="John Doe" class="w-8 h-8 rounded-full"
-                                loading="lazy" decoding="async" />
-                            <!-- <img id="avatar" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" ...> -->
-                            <span class="hidden sm:inline text-sm font-medium text-gray-700">John Doe</span>
-                            <i data-feather="chevron-down" class="w-4 h-4 text-gray-500" aria-hidden="true"></i>
-                        </button>
-                        <div id="user-menu"
-                            class="hidden absolute right-0 mt-2 w-48 rounded-md border border-gray-200 bg-white shadow-md"
-                            role="menu" aria-labelledby="user-menu-btn">
-                            <a href="#" class="block px-4 py-2 text-sm hover:bg-gray-50" role="menuitem">Profile</a>
-                            <a href="#" class="block px-4 py-2 text-sm hover:bg-gray-50" role="menuitem">Settings</a>
-                            <a id="logout-link" href="../index.html" class="block px-4 py-2 text-sm hover:bg-gray-50"
-                                role="menuitem">Sign out</a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </header>
-
+<body class="bg-gray-50 text-gray-900 antialiased"
+    style="background: var(--project-bg, #f9fafb) var(--project-bg-image, none) no-repeat center / cover !important;">
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <!-- Top meta -->
         <section class="relative mb-8">
@@ -100,13 +46,23 @@
                 <i data-feather="settings" class="w-8 h-8 text-white" aria-hidden="true"></i>
             </div>
             <div class="pl-24">
-                <h1 class="text-2xl font-bold tracking-tight" id="p-title">Website Redesign</h1>
-                <p class="text-gray-600" id="p-desc">Complete redesign of company website with new UI/UX.</p>
-                <ul class="mt-3 flex flex-wrap gap-4 text-sm text-gray-500">
-                    <li class="inline-flex items-center"><i data-feather="user" class="w-4 h-4 mr-1"></i><span
-                            id="p-createdby">Created by John Doe</span></li>
-                    <li class="inline-flex items-center"><i data-feather="calendar" class="w-4 h-4 mr-1"></i><span
-                            id="p-due">Due 25/05/2026</span></li>
+                <div id="sk-top" class="animate-pulse space-y-2">
+                    <div class="h-6 w-60 bg-gray-200 rounded"></div>
+                    <div class="h-4 w-96 bg-gray-200 rounded"></div>
+                    <div class="flex gap-4">
+                        <div class="h-4 w-40 bg-gray-200 rounded"></div>
+                        <div class="h-4 w-40 bg-gray-200 rounded"></div>
+                    </div>
+                </div>
+                <h1 id="p-title" class="text-2xl font-bold tracking-tight hidden"></h1>
+                <p id="p-desc" class="text-gray-600 hidden"></p>
+                <ul id="p-meta" class="mt-3 flex flex-wrap gap-4 text-sm text-gray-500 hidden">
+                    <li class="inline-flex items-center">
+                        <i data-feather="user" class="w-4 h-4 mr-1"></i><span id="p-createdby"></span>
+                    </li>
+                    <li class="inline-flex items-center">
+                        <i data-feather="calendar" class="w-4 h-4 mr-1"></i><span id="p-due"></span>
+                    </li>
                 </ul>
             </div>
         </section>
@@ -134,7 +90,8 @@
                     </button>
                     <div class="mt-6 border-t border-gray-100"></div>
                     <button id="btn-delete"
-                        class="w-full text-left px-4 py-3 text-sm font-medium text-red-600 hover:bg-red-50 flex items-center gap-2">
+                        class="w-full text-left px-4 py-3 text-sm font-medium text-red-600 hover:bg-red-50 flex items-center gap-2"
+                        title="Soft delete; restorable by admin">
                         <i data-feather="trash-2" class="w-4 h-4"></i><span>Delete Project</span>
                     </button>
                 </nav>
@@ -145,28 +102,43 @@
                 <!-- Overview -->
                 <div id="tab-overview" class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
                     <h2 class="text-lg font-semibold mb-4">Project stats</h2>
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+
+                    <div id="sk-overview" class="grid grid-cols-1 sm:grid-cols-3 gap-4 animate-pulse">
                         <div class="rounded-lg border p-4">
-                            <p class="text-sm text-gray-500">Steps</p>
-                            <p class="text-2xl font-bold">12</p>
+                            <div class="h-4 bg-gray-200 w-20 rounded mb-2"></div>
+                            <div class="h-6 bg-gray-200 w-10 rounded"></div>
                         </div>
                         <div class="rounded-lg border p-4">
-                            <p class="text-sm text-gray-500">Completed</p>
-                            <p class="text-2xl font-bold">5</p>
+                            <div class="h-4 bg-gray-200 w-24 rounded mb-2"></div>
+                            <div class="h-6 bg-gray-200 w-10 rounded"></div>
                         </div>
                         <div class="rounded-lg border p-4">
-                            <p class="text-sm text-gray-500">Due ≤ 7 days</p>
-                            <p class="text-2xl font-bold">3</p>
+                            <div class="h-4 bg-gray-200 w-28 rounded mb-2"></div>
+                            <div class="h-6 bg-gray-200 w-10 rounded"></div>
                         </div>
                     </div>
 
-                    <div class="mt-6">
+                    <div id="ov-cards" class="grid grid-cols-1 sm:grid-cols-3 gap-4 hidden">
+                        <div class="rounded-lg border p-4">
+                            <p class="text-sm text-gray-500">Steps</p>
+                            <p id="stepsCount" class="text-2xl font-bold">—</p>
+                        </div>
+                        <div class="rounded-lg border p-4">
+                            <p class="text-sm text-gray-500">Completed</p>
+                            <p id="completedCount" class="text-2xl font-bold">—</p>
+                        </div>
+                        <div class="rounded-lg border p-4">
+                            <p class="text-sm text-gray-500">Due ≤ 7 days</p>
+                            <p id="dueSoonCount" class="text-2xl font-bold">—</p>
+                        </div>
+                    </div>
+
+                    <div id="ov-progress" class="mt-6 hidden">
                         <div class="flex justify-between text-sm text-gray-500 mb-1"><span>Overall
-                                completion</span><span>42%</span></div>
-                        <div class="h-2 rounded bg-gray-200" role="progressbar" aria-valuenow="42" aria-valuemin="0"
-                            aria-valuemax="100">
-                            <div class="h-2 rounded bg-gradient-to-r from-blue-500 to-purple-500" style="width:42%">
-                            </div>
+                                completion</span><span id="overallPct">—</span></div>
+                        <div class="h-2 rounded bg-gray-200" role="progressbar" aria-valuemin="0" aria-valuemax="100">
+                            <div id="overallBar" class="h-2 rounded bg-gradient-to-r from-blue-500 to-purple-500"
+                                style="width:0%"></div>
                         </div>
                     </div>
                 </div>
@@ -180,46 +152,77 @@
                             <label class="block text-sm font-medium mb-1" for="f_title">Name</label>
                             <input id="f_title"
                                 class="project-field w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500"
-                                value="Website Redesign" />
+                                value="" />
                         </div>
                         <div>
                             <label class="block text-sm font-medium mb-1" for="f_desc">Description</label>
                             <textarea id="f_desc" rows="3"
-                                class="project-field w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500">Complete redesign of company website with new UI/UX.</textarea>
+                                class="project-field w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500"></textarea>
                         </div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <label class="block text-sm font-medium mb-1" for="f_start">Start date</label>
-                                <input id="f_start" type="date"
-                                    class="project-field w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500"
-                                    value="2026-05-01" />
+                                <input id="f_start" type="text" inputmode="none"
+                                    class="project-field w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500" />
                             </div>
                             <div>
                                 <label class="block text-sm font-medium mb-1" for="f_due">Due date</label>
-                                <input id="f_due" type="date"
-                                    class="project-field w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500"
-                                    value="2026-05-25" />
+                                <input id="f_due" type="text" inputmode="none"
+                                    class="project-field w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500" />
                             </div>
                         </div>
-                        <div>
+
+                        <!-- Background -->
+                        <div id="bg-uploader">
                             <label class="block text-sm font-medium mb-1">Background</label>
-                            <div class="flex items-center gap-3">
-                                <button type="button" data-bg="#eef2ff"
-                                    class="bg-slate-100 w-8 h-8 rounded-full border hover:ring-2 hover:ring-indigo-400"></button>
-                                <button type="button" data-bg="#ecfeff"
-                                    class="bg-cyan-50 w-8 h-8 rounded-full border hover:ring-2 hover:ring-indigo-400"></button>
-                                <button type="button" data-bg="#f5f3ff"
-                                    class="bg-purple-50 w-8 h-8 rounded-full border hover:ring-2 hover:ring-indigo-400"></button>
+
+                            <div class="flex items-center justify-between">
+                                <p class="text-sm text-gray-700">
+                                    Choose background
+                                    <button id="bg-link-color" type="button"
+                                        class="text-indigo-600 hover:text-indigo-800 underline underline-offset-2">color</button>,
+                                    or select
+                                    <button id="bg-link-image" type="button"
+                                        class="text-indigo-600 hover:text-indigo-800 underline underline-offset-2">picture</button>.
+                                </p>
+                                <button id="bg-clear" type="button"
+                                    class="hidden px-2 py-1 text-xs border rounded-md">Clear</button>
+                            </div>
+
+                            <!-- Color chooser -->
+                            <div id="bg-popover-color" class="hidden mt-3">
+                                <div class="flex items-center gap-3">
+                                    <button type="button" data-bg="#eef2ff"
+                                        class="bg-slate-100 w-8 h-8 rounded-full border hover:ring-2 hover:ring-indigo-400"
+                                        aria-label="Set background #eef2ff"></button>
+                                    <button type="button" data-bg="#ecfeff"
+                                        class="bg-cyan-50 w-8 h-8 rounded-full border hover:ring-2 hover:ring-indigo-400"
+                                        aria-label="Set background #ecfeff"></button>
+                                    <button type="button" data-bg="#f5f3ff"
+                                        class="bg-purple-50 w-8 h-8 rounded-full border hover:ring-2 hover:ring-indigo-400"
+                                        aria-label="Set background #f5f3ff"></button>
+                                    <button type="button" data-bg="#fff7ed"
+                                        class="bg-orange-50 w-8 h-8 rounded-full border hover:ring-2 hover:ring-indigo-400"
+                                        aria-label="Set background #fff7ed"></button>
+                                </div>
+                            </div>
+
+                            <!-- Image chooser -->
+                            <div id="bg-popover-image" class="hidden mt-3">
                                 <label class="inline-flex items-center gap-2 text-sm cursor-pointer">
                                     <input id="bgFile" type="file" accept="image/*" class="hidden">
-                                    <span class="px-3 py-1 rounded-md border bg-white hover:bg-gray-50">Upload</span>
+                                    <span class="px-3 py-1 rounded-md border bg-white hover:bg-gray-50">Browse</span>
                                 </label>
+                                <progress id="bg-progress" class="hidden w-full mt-2" max="100" value="0"></progress>
                             </div>
+
+                            <!-- Local preview only -->
                             <div id="bgPreview" class="hidden mt-3">
                                 <img id="bgImg" src="" alt="Background preview"
                                     class="w-full h-40 object-cover rounded-lg border">
                             </div>
                         </div>
+                        <!-- /Background -->
                     </div>
                 </form>
 
@@ -239,26 +242,19 @@
                                 class="px-3 py-2 rounded-md text-white bg-indigo-600 hover:bg-indigo-700 text-sm btn-trans">Invite</button>
                         </div>
                     </div>
-                    <ul id="membersList" class="space-y-3">
+                    <ul id="sk-members" class="space-y-3 animate-pulse">
                         <li class="flex items-center justify-between p-3 rounded-lg border">
                             <div class="flex items-center gap-3">
-                                <img src="https://i.pravatar.cc/40?img=1" alt="" class="w-8 h-8 rounded-full">
-                                <div>
-                                    <p class="text-sm font-medium leading-5">John Doe</p>
-                                    <p class="text-xs text-gray-500">john@example.com</p>
+                                <div class="w-8 h-8 rounded-full bg-gray-200"></div>
+                                <div class="space-y-1">
+                                    <div class="h-4 w-28 bg-gray-200 rounded"></div>
+                                    <div class="h-3 w-40 bg-gray-200 rounded"></div>
                                 </div>
                             </div>
-                            <div class="flex items-center gap-2">
-                                <select class="text-sm border rounded-md px-2 py-1">
-                                    <option>admin</option>
-                                    <option selected>member</option>
-                                    <option>guest</option>
-                                </select>
-                                <button class="p-1.5 rounded-md text-red-600 hover:bg-red-50" aria-label="Remove"><i
-                                        data-feather="trash-2" class="w-4 h-4"></i></button>
-                            </div>
+                            <div class="h-8 w-28 bg-gray-200 rounded"></div>
                         </li>
                     </ul>
+                    <ul id="membersList" class="space-y-3 hidden"></ul>
                 </div>
 
                 <!-- Items -->
@@ -282,23 +278,7 @@
                                     <th class="px-4 py-2 text-right">Actions</th>
                                 </tr>
                             </thead>
-                            <tbody id="itemsBody" class="divide-y">
-                                <tr>
-                                    <td class="px-4 py-2">Research competitors</td>
-                                    <td class="px-4 py-2"><span class="px-2 py-0.5 rounded-full bg-gray-100">Text</span>
-                                    </td>
-                                    <td class="px-4 py-2"><span
-                                            class="px-2 py-0.5 rounded-full bg-gray-200">present</span></td>
-                                    <td class="px-4 py-2">John Doe</td>
-                                    <td class="px-4 py-2">03/05/2026</td>
-                                    <td class="px-4 py-2 text-right">
-                                        <button class="text-indigo-600 hover:text-indigo-800 mr-2" aria-label="Edit"><i
-                                                data-feather="edit" class="w-4 h-4"></i></button>
-                                        <button class="text-red-600 hover:text-red-800" aria-label="Delete"><i
-                                                data-feather="trash-2" class="w-4 h-4"></i></button>
-                                    </td>
-                                </tr>
-                            </tbody>
+                            <tbody id="itemsBody" class="divide-y"><!-- populated by JS --></tbody>
                         </table>
                     </div>
                 </div>
@@ -318,21 +298,9 @@
     </footer>
 
     <script>
-        // icons + user menu
         document.addEventListener('DOMContentLoaded', () => { window.feather && window.feather.replace(); });
-        (function () {
-            const btn = document.getElementById('user-menu-btn');
-            const menu = document.getElementById('user-menu');
-            const root = document.getElementById('user-menu-root');
-            function close() { menu.classList.add('hidden'); btn?.setAttribute('aria-expanded', 'false'); }
-            function toggle() { menu.classList.toggle('hidden'); btn?.setAttribute('aria-expanded', menu.classList.contains('hidden') ? 'false' : 'true'); }
-            btn?.addEventListener('click', (e) => { e.stopPropagation(); toggle(); });
-            document.addEventListener('click', (e) => { if (root && !root.contains(e.target)) close(); });
-            document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
-            document.getElementById('logout-link')?.addEventListener('click', () => close());
-        })();
 
-        // tabs
+        // Tabs
         const tabButtons = document.querySelectorAll('.set-tab');
         const panes = {
             overview: document.getElementById('tab-overview'),
@@ -346,74 +314,48 @@
                 tabButtons.forEach(x => x.classList.add('text-gray-700'));
                 Object.values(panes).forEach(p => p.classList.add('hidden'));
                 b.classList.add('text-indigo-700', 'bg-indigo-50');
-                const key = b.getAttribute('data-tab');
-                panes[key].classList.remove('hidden');
+                panes[b.getAttribute('data-tab')].classList.remove('hidden');
             });
         });
 
-        // dirty state
-        const fields = document.querySelectorAll('.project-field');
-        const saveBtn = document.getElementById('btn-save');
-        const cancelBtn = document.getElementById('btn-cancel');
-        const original = {};
-        fields.forEach(f => { original[f.id] = f.value; f.addEventListener('input', checkDirty); });
-        function checkDirty() {
-            let dirty = false;
-            fields.forEach(f => { if (f.value !== original[f.id]) dirty = true; });
-            saveBtn.disabled = !dirty;
-        }
-        saveBtn.addEventListener('click', () => {
-            alert('Changes saved (placeholder).');
-            fields.forEach(f => { original[f.id] = f.value; });
-            checkDirty();
-        });
-        cancelBtn.addEventListener('click', () => {
-            fields.forEach(f => { f.value = original[f.id]; });
-            checkDirty();
-        });
-
-        // background upload preview
+        // Local image preview only; no self background painting
         const bgFile = document.getElementById('bgFile');
         const bgPreview = document.getElementById('bgPreview');
         const bgImg = document.getElementById('bgImg');
-        document.querySelectorAll('[data-bg]').forEach(btn => {
-            btn.addEventListener('click', () => {
-                bgPreview.classList.add('hidden'); bgImg.src = '';
-                document.body.style.setProperty('--project-bg', btn.getAttribute('data-bg'));
-            });
-        });
+        const bgClear = document.getElementById('bg-clear');
+
         bgFile?.addEventListener('change', (e) => {
             const f = e.target.files?.[0]; if (!f) return;
             if (!/^image\//.test(f.type) || f.size > 5 * 1024 * 1024) { alert('Use image up to 5MB.'); bgFile.value = ''; return; }
-            const r = new FileReader(); r.onload = () => { bgImg.src = r.result; bgPreview.classList.remove('hidden'); checkDirty(); }; r.readAsDataURL(f);
+            const r = new FileReader();
+            r.onload = () => { bgImg.src = r.result; bgPreview.classList.remove('hidden'); bgClear.classList.remove('hidden'); };
+            r.readAsDataURL(f);
+        });
+        bgClear?.addEventListener('click', () => {
+            if (bgFile) bgFile.value = '';
+            if (bgImg) bgImg.src = '';
+            bgPreview?.classList.add('hidden');
+            bgClear?.classList.add('hidden');
         });
 
-        // invite mock
-        document.getElementById('inviteBtn')?.addEventListener('click', () => {
-            const email = (document.getElementById('inviteEmail').value || '').trim();
-            const role = document.getElementById('inviteRole').value;
-            if (!email) { alert('Enter email'); return; }
-            const li = document.createElement('li');
-            li.className = 'flex items-center justify-between p-3 rounded-lg border';
-            li.innerHTML = `<div class="flex items-center gap-3">
-          <img src="https://i.pravatar.cc/40?u=${encodeURIComponent(email)}" class="w-8 h-8 rounded-full" alt="">
-          <div><p class="text-sm font-medium">${email.split('@')[0]}</p><p class="text-xs text-gray-500">${email}</p></div></div>
-        <div class="flex items-center gap-2">
-          <select class="text-sm border rounded-md px-2 py-1"><option>admin</option><option ${role === 'member' ? 'selected' : ''}>member</option><option ${role === 'guest' ? 'selected' : ''}>guest</option></select>
-          <button class="p-1.5 rounded-md text-red-600 hover:bg-red-50" aria-label="Remove"><i data-feather="trash-2" class="w-4 h-4"></i></button>
-        </div>`;
-            document.getElementById('membersList').appendChild(li);
-            document.getElementById('inviteEmail').value = '';
-            window.feather && window.feather.replace();
-        });
-
-        // delete confirm
+        // Delete confirm
         document.getElementById('btn-delete')?.addEventListener('click', () => {
-            if (confirm('Delete project? This is a soft delete in spec §6.3.')) {
-                alert('Project moved to recycle (placeholder).');
+            if (confirm('Move project to recycle bin? Admin can restore later.')) { /* handled in ../js/settings.js */ }
+        });
+
+        // Passive listener for parent to set preview if needed
+        window.addEventListener('message', (e) => {
+            const d = e.data || {};
+            if (d.type === 'project:bg') {
+                if (d.color) document.documentElement.style.setProperty('--project-bg', d.color);
+                else document.documentElement.style.removeProperty('--project-bg');
+                if (d.url) document.documentElement.style.setProperty('--project-bg-image', `url("${d.url}")`);
+                else document.documentElement.style.removeProperty('--project-bg-image');
             }
         });
     </script>
+
+    <script type="module" src="../js/settings.js"></script>
 </body>
 
 </html>
