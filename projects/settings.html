@@ -191,21 +191,135 @@
 
                             <!-- Color chooser -->
                             <div id="bg-popover-color" class="hidden mt-3">
-                                <div class="flex items-center gap-3">
-                                    <button type="button" data-bg="#eef2ff"
-                                        class="bg-slate-100 w-8 h-8 rounded-full border hover:ring-2 hover:ring-indigo-400"
-                                        aria-label="Set background #eef2ff"></button>
-                                    <button type="button" data-bg="#ecfeff"
-                                        class="bg-cyan-50 w-8 h-8 rounded-full border hover:ring-2 hover:ring-indigo-400"
-                                        aria-label="Set background #ecfeff"></button>
-                                    <button type="button" data-bg="#f5f3ff"
-                                        class="bg-purple-50 w-8 h-8 rounded-full border hover:ring-2 hover:ring-indigo-400"
-                                        aria-label="Set background #f5f3ff"></button>
-                                    <button type="button" data-bg="#fff7ed"
-                                        class="bg-orange-50 w-8 h-8 rounded-full border hover:ring-2 hover:ring-indigo-400"
-                                        aria-label="Set background #fff7ed"></button>
+                                <!-- One neat horizontal row; real gradient fills; upper-left is transparent -->
+                                <div class="flex items-center gap-2 overflow-x-auto whitespace-nowrap py-1">
+                                    <!-- Blues -->
+                                    <button type="button"
+                                        data-bg="linear-gradient(to bottom right, rgba(219,234,254,0) 0%, #dbeafe 100%)"
+                                        class="w-8 h-8 rounded-full border shadow-sm hover:ring-2 hover:ring-indigo-400 shrink-0"
+                                        style="background: linear-gradient(to bottom right, rgba(219,234,254,0) 0%, #dbeafe 100%);"
+                                        aria-label="Gradient baby blue"></button>
+                                    <button type="button"
+                                        data-bg="linear-gradient(to bottom right, rgba(191,219,254,0) 0%, #bfdbfe 100%)"
+                                        class="w-8 h-8 rounded-full border shadow-sm hover:ring-2 hover:ring-indigo-400 shrink-0"
+                                        style="background: linear-gradient(to bottom right, rgba(191,219,254,0) 0%, #bfdbfe 100%);"
+                                        aria-label="Gradient soft blue"></button>
+                                    <button type="button"
+                                        data-bg="linear-gradient(to bottom right, rgba(199,210,254,0) 0%, #c7d2fe 100%)"
+                                        class="w-8 h-8 rounded-full border shadow-sm hover:ring-2 hover:ring-indigo-400 shrink-0"
+                                        style="background: linear-gradient(to bottom right, rgba(199,210,254,0) 0%, #c7d2fe 100%);"
+                                        aria-label="Gradient indigo light"></button>
+
+                                    <!-- Purples -->
+                                    <button type="button"
+                                        data-bg="linear-gradient(to bottom right, rgba(237,233,254,0) 0%, #ede9fe 100%)"
+                                        class="w-8 h-8 rounded-full border shadow-sm hover:ring-2 hover:ring-indigo-400 shrink-0"
+                                        style="background: linear-gradient(to bottom right, rgba(237,233,254,0) 0%, #ede9fe 100%);"
+                                        aria-label="Gradient lavender"></button>
+                                    <button type="button"
+                                        data-bg="linear-gradient(to bottom right, rgba(233,213,255,0) 0%, #e9d5ff 100%)"
+                                        class="w-8 h-8 rounded-full border shadow-sm hover:ring-2 hover:ring-indigo-400 shrink-0"
+                                        style="background: linear-gradient(to bottom right, rgba(233,213,255,0) 0%, #e9d5ff 100%);"
+                                        aria-label="Gradient soft purple"></button>
+                                    <button type="button"
+                                        data-bg="linear-gradient(to bottom right, rgba(243,232,255,0) 0%, #f3e8ff 100%)"
+                                        class="w-8 h-8 rounded-full border shadow-sm hover:ring-2 hover:ring-indigo-400 shrink-0"
+                                        style="background: linear-gradient(to bottom right, rgba(243,232,255,0) 0%, #f3e8ff 100%);"
+                                        aria-label="Gradient lilac"></button>
+
+                                    <!-- Cyans / Teals -->
+                                    <button type="button"
+                                        data-bg="linear-gradient(to bottom right, rgba(236,254,255,0) 0%, #ecfeff 100%)"
+                                        class="w-8 h-8 rounded-full border shadow-sm hover:ring-2 hover:ring-indigo-400 shrink-0"
+                                        style="background: linear-gradient(to bottom right, rgba(236,254,255,0) 0%, #ecfeff 100%);"
+                                        aria-label="Gradient cyan"></button>
+                                    <button type="button"
+                                        data-bg="linear-gradient(to bottom right, rgba(207,250,254,0) 0%, #cffafe 100%)"
+                                        class="w-8 h-8 rounded-full border shadow-sm hover:ring-2 hover:ring-indigo-400 shrink-0"
+                                        style="background: linear-gradient(to bottom right, rgba(207,250,254,0) 0%, #cffafe 100%);"
+                                        aria-label="Gradient sky"></button>
+                                    <button type="button"
+                                        data-bg="linear-gradient(to bottom right, rgba(204,251,241,0) 0%, #ccfbf1 100%)"
+                                        class="w-8 h-8 rounded-full border shadow-sm hover:ring-2 hover:ring-indigo-400 shrink-0"
+                                        style="background: linear-gradient(to bottom right, rgba(204,251,241,0) 0%, #ccfbf1 100%);"
+                                        aria-label="Gradient teal"></button>
+
+                                    <!-- Greens -->
+                                    <button type="button"
+                                        data-bg="linear-gradient(to bottom right, rgba(220,252,231,0) 0%, #dcfce7 100%)"
+                                        class="w-8 h-8 rounded-full border shadow-sm hover:ring-2 hover:ring-indigo-400 shrink-0"
+                                        style="background: linear-gradient(to bottom right, rgba(220,252,231,0) 0%, #dcfce7 100%);"
+                                        aria-label="Gradient mint"></button>
+                                    <button type="button"
+                                        data-bg="linear-gradient(to bottom right, rgba(209,250,229,0) 0%, #d1fae5 100%)"
+                                        class="w-8 h-8 rounded-full border shadow-sm hover:ring-2 hover:ring-indigo-400 shrink-0"
+                                        style="background: linear-gradient(to bottom right, rgba(209,250,229,0) 0%, #d1fae5 100%);"
+                                        aria-label="Gradient aquamarine"></button>
+                                    <button type="button"
+                                        data-bg="linear-gradient(to bottom right, rgba(231,254,231,0) 0%, #e7fee7 100%)"
+                                        class="w-8 h-8 rounded-full border shadow-sm hover:ring-2 hover:ring-indigo-400 shrink-0"
+                                        style="background: linear-gradient(to bottom right, rgba(231,254,231,0) 0%, #e7fee7 100%);"
+                                        aria-label="Gradient soft green"></button>
+
+                                    <!-- Yellows -->
+                                    <button type="button"
+                                        data-bg="linear-gradient(to bottom right, rgba(254,249,195,0) 0%, #fef9c3 100%)"
+                                        class="w-8 h-8 rounded-full border shadow-sm hover:ring-2 hover:ring-indigo-400 shrink-0"
+                                        style="background: linear-gradient(to bottom right, rgba(254,249,195,0) 0%, #fef9c3 100%);"
+                                        aria-label="Gradient pastel yellow"></button>
+                                    <button type="button"
+                                        data-bg="linear-gradient(to bottom right, rgba(254,243,199,0) 0%, #fef3c7 100%)"
+                                        class="w-8 h-8 rounded-full border shadow-sm hover:ring-2 hover:ring-indigo-400 shrink-0"
+                                        style="background: linear-gradient(to bottom right, rgba(254,243,199,0) 0%, #fef3c7 100%);"
+                                        aria-label="Gradient soft amber"></button>
+                                    <button type="button"
+                                        data-bg="linear-gradient(to bottom right, rgba(255,247,237,0) 0%, #fff7ed 100%)"
+                                        class="w-8 h-8 rounded-full border shadow-sm hover:ring-2 hover:ring-indigo-400 shrink-0"
+                                        style="background: linear-gradient(to bottom right, rgba(255,247,237,0) 0%, #fff7ed 100%);"
+                                        aria-label="Gradient warm sand"></button>
+
+                                    <!-- Oranges / Reds -->
+                                    <button type="button"
+                                        data-bg="linear-gradient(to bottom right, rgba(255,237,213,0) 0%, #ffedd5 100%)"
+                                        class="w-8 h-8 rounded-full border shadow-sm hover:ring-2 hover:ring-indigo-400 shrink-0"
+                                        style="background: linear-gradient(to bottom right, rgba(255,237,213,0) 0%, #ffedd5 100%);"
+                                        aria-label="Gradient peach"></button>
+                                    <button type="button"
+                                        data-bg="linear-gradient(to bottom right, rgba(255,228,230,0) 0%, #ffe4e6 100%)"
+                                        class="w-8 h-8 rounded-full border shadow-sm hover:ring-2 hover:ring-indigo-400 shrink-0"
+                                        style="background: linear-gradient(to bottom right, rgba(255,228,230,0) 0%, #ffe4e6 100%);"
+                                        aria-label="Gradient rose"></button>
+                                    <button type="button"
+                                        data-bg="linear-gradient(to bottom right, rgba(254,226,226,0) 0%, #fee2e2 100%)"
+                                        class="w-8 h-8 rounded-full border shadow-sm hover:ring-2 hover:ring-indigo-400 shrink-0"
+                                        style="background: linear-gradient(to bottom right, rgba(254,226,226,0) 0%, #fee2e2 100%);"
+                                        aria-label="Gradient soft red"></button>
+
+                                    <!-- Neutrals -->
+                                    <button type="button"
+                                        data-bg="linear-gradient(to bottom right, rgba(248,250,252,0) 0%, #f8fafc 100%)"
+                                        class="w-8 h-8 rounded-full border shadow-sm hover:ring-2 hover:ring-indigo-400 shrink-0"
+                                        style="background: linear-gradient(to bottom right, rgba(248,250,252,0) 0%, #f8fafc 100%);"
+                                        aria-label="Gradient near white"></button>
+                                    <button type="button"
+                                        data-bg="linear-gradient(to bottom right, rgba(241,245,249,0) 0%, #f1f5f9 100%)"
+                                        class="w-8 h-8 rounded-full border shadow-sm hover:ring-2 hover:ring-indigo-400 shrink-0"
+                                        style="background: linear-gradient(to bottom right, rgba(241,245,249,0) 0%, #f1f5f9 100%);"
+                                        aria-label="Gradient cool gray"></button>
+                                    <button type="button"
+                                        data-bg="linear-gradient(to bottom right, rgba(229,231,235,0) 0%, #e5e7eb 100%)"
+                                        class="w-8 h-8 rounded-full border shadow-sm hover:ring-2 hover:ring-indigo-400 shrink-0"
+                                        style="background: linear-gradient(to bottom right, rgba(229,231,235,0) 0%, #e5e7eb 100%);"
+                                        aria-label="Gradient light gray"></button>
                                 </div>
+
+                                <p class="mt-3 text-xs text-gray-500">
+                                    Each swatch blends from transparent at the upper-left to color at the lower-right.
+                                </p>
                             </div>
+
+
+
 
                             <!-- Image chooser -->
                             <div id="bg-popover-image" class="hidden mt-3">
@@ -290,7 +404,7 @@
     <footer class="sticky bottom-0 bg-white border-t border-gray-200 py-3 px-4 shadow-sm">
         <div class="max-w-7xl mx-auto flex justify-end gap-3">
             <button id="btn-cancel"
-                class="px-4 py-2 rounded-md border border-gray-300 bg-white text-sm hover:bg-gray-50">Cancel</button>
+                class="px-4 py-2 rounded-md border border-gray-300 bg-white text-sm hover:bg-gray-50">Close</button>
             <button id="btn-save"
                 class="save-button px-4 py-2 rounded-md bg-indigo-600 text-white text-sm hover:bg-indigo-700"
                 disabled>Save changes</button>

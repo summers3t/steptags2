@@ -400,7 +400,11 @@ function wireBackground() {
 
     // Openers
     bgLinkColor?.addEventListener('click', () => togglePopovers('color'));
-    bgLinkImage?.addEventListener('click', () => togglePopovers('image'));
+    // bgLinkImage?.addEventListener('click', () => togglePopovers('image'));
+    bgLinkImage?.addEventListener('click', () => {
+        togglePopovers(null);           // do not show the Browse button pane
+        bgFile?.click();                // open file chooser immediately
+    });
 
     // Color chips: selecting a color cancels any image (existing or pending)
     $$('#bg-uploader [data-bg]').forEach((btn) => {
