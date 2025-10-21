@@ -1,0 +1,119 @@
+1) Work on feat/sandbox and push new changes
+# switch to feature branch and sync
+git switch feat/sandbox
+git pull --ff-only
+
+# stage everything and commit
+git add -A
+git commit -m "feat: <short description>"
+
+# push to remote
+git push -u origin feat/sandbox
+
+2) Promote tested changes from feat/sandbox to main
+
+Option A: merge commit (keeps full history)
+
+git fetch origin
+git switch main
+git pull --ff-only
+
+git merge --no-ff feat/sandbox -m "merge: feat/sandbox -> main"
+git push origin main
+
+
+Option B: squash merge (single commit on main)
+
+git fetch origin
+git switch main
+git pull --ff-only
+
+git merge --squash feat/sandbox
+git commit -m "feat: integrate feat/sandbox"
+git push origin main
+
+3) Roll back main if the promotion causes issues
+
+Safe revert of the merge commit (no history rewrite)
+
+# find the merge commit hash first
+git log --oneline --merges
+
+# revert the merge; use the hash from above
+git revert -m 1 <MERGE_COMMIT_HASH>
+git push origin main
+
+
+Hard reset main to last known good (history rewrite; use with care)
+
+# set MAIN to a known-good commit or tag
+git switch main
+git reset --hard <GOOD_COMMIT_OR_TAG>
+git push --force-with-lease origin main
+
+
+Force main to match the current state of feat/sandbox (also rewrite)
+
+git fetch origin
+git switch main
+git reset --hard origin/feat/sandbox
+git push --force-with-lease origin main
+
+4) Keep feat/sandbox up to date with main
+
+Rebase (clean linear history)
+
+git fetch origin
+git switch feat/sandbox
+git rebase origin/main
+# if conflicts: resolve files, then:
+# git add -A
+# git rebase --continue
+git push --force-with-lease
+
+
+Merge (no history rewrite)
+
+git fetch origin
+git switch feat/sandbox
+git merge origin/main
+git push
+
+5) Create a new feature branch for another task
+git fetch origin
+git switch main
+git pull --ff-only
+git switch -c feat/<task-name>
+git push -u origin feat/<task-name>
+
+6) Tag the approved release on main
+git switch main
+git pull --ff-only
+git tag -a v<major.minor.patch> -m "release: v<major.minor.patch>"
+git push origin v<major.minor.patch>
+
+7) Hotfix on main, then backport to feat/sandbox
+# on main
+git switch main
+git pull --ff-only
+# edit files...
+git add -A
+git commit -m "fix: <hotfix>"
+git push origin main
+
+# cherry-pick into feature
+git switch feat/sandbox
+git fetch origin
+git cherry-pick <HOTFIX_COMMIT_HASH>
+git push
+
+8) Clean up a merged feature branch
+# after merge into main
+git branch -d feat/sandbox
+git push origin --delete feat/sandbox
+
+9) Save work-in-progress without committing (stash)
+git stash push -u -m "wip: <context>"
+# later
+git stash list
+git stash pop    # or: git stash apply <stash@{n}>
