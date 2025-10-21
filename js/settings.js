@@ -19,7 +19,15 @@ import {
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
 const fmtISO = (d) => { if (!d) return ''; const x = new Date(d); const m = String(x.getMonth() + 1).padStart(2, '0'); const dd = String(x.getDate()).padStart(2, '0'); return `${x.getFullYear()}-${m}-${dd}`; };
-const fmtHuman = (d) => { try { const x = new Date(d); return `${String(x.getDate()).padStart(2, '0')}/${String(x.getMonth() + 1).padStart(2, '0')}/${x.getFullYear()}`; } catch { return ''; } };
+const fmtHuman = (d) => {
+    try {
+        const x = new Date(d);
+        const dd = String(x.getDate()).padStart(2, '0');
+        const mm = String(x.getMonth() + 1).padStart(2, '0');
+        const yyyy = x.getFullYear();
+        return `${dd}.${mm}.${yyyy}`;
+    } catch { return ''; }
+};
 const escapeHtml = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 const qsProjectId = () => { const u = new URL(location.href); return u.searchParams.get('projectId') || u.searchParams.get('id') || u.searchParams.get('p'); };
 const toast = (m) => console.log('[settings]', m);
@@ -84,6 +92,7 @@ async function init() {
     if (!state.id) return console.error('Missing projectId');
 
     setupFlatpickr();
+    wireDateClears();
     await hydrateProject();
     await hydrateMembers();
 
@@ -141,20 +150,23 @@ async function hydrateProject() {
     // Edit values
     if (fTitle) fTitle.value = title;
     if (fDesc) fDesc.value = description;
-    if (fStart) fStart.value = fmtISO(start_date);
-    if (fDue) fDue.value = fmtISO(due_date);
 
+    // Drive Flatpickr directly from DB dates to avoid altInput desync
+    try { state.fpStart?.clear(); } catch { }
+    try { state.fpDue?.clear(); } catch { }
+    if (start_date) state.fpStart?.setDate(new Date(`${start_date}T00:00:00Z`), true);
+    if (due_date) state.fpDue?.setDate(new Date(`${due_date}T00:00:00Z`), true);
+
+    // Snapshot originals from DB, not the input fields
     state.original = {
         title: fTitle?.value || '',
         description: fDesc?.value || '',
-        start_date: fStart?.value || '',
-        due_date: fDue?.value || '',
+        start_date: start_date || '',
+        due_date: due_date || '',
         background_color,
         background
     };
 
-    try { state.fpStart?.setDate(fStart?.value || null, true); } catch { }
-    try { state.fpDue?.setDate(fDue?.value || null, true); } catch { }
     enforceDateBounds();
 
     // Background preview only
@@ -275,7 +287,10 @@ function wireEditFields() {
 
     [fTitle, fDesc, fStart, fDue].forEach(el => {
         el?.addEventListener('input', onAnyChange);
-        el?.addEventListener('change', () => { onAnyChange(); if (el === fStart || el === fDue) enforceDateBounds(); });
+        el?.addEventListener('change', () => {
+            setDirty(true);
+            if (el === fStart || el === fDue) enforceDateBounds();
+        });
     });
 
     saveBtn?.addEventListener('click', async (e) => {
@@ -285,8 +300,17 @@ function wireEditFields() {
         const patch = {};
         if (fTitle && fTitle.value !== state.original.title) patch.title = fTitle.value;
         if (fDesc && fDesc.value !== state.original.description) patch.description = fDesc.value;
-        if (fStart && fStart.value !== state.original.start_date) patch.start_date = fStart.value || null;
-        if (fDue && fDue.value !== state.original.due_date) patch.due_date = fDue.value || null;
+
+        const startVal = state.fpStart?.selectedDates?.[0]
+            ? state.fpStart.formatDate(state.fpStart.selectedDates[0], 'Y-m-d')
+            : (fStart?.value || null);
+
+        const dueVal = state.fpDue?.selectedDates?.[0]
+            ? state.fpDue.formatDate(state.fpDue.selectedDates[0], 'Y-m-d')
+            : (fDue?.value || null);
+
+        if (startVal !== state.original.start_date) patch.start_date = startVal ?? null;
+        if (dueVal !== state.original.due_date) patch.due_date = dueVal ?? null;
 
         // Include color only if explicitly changed this session (may be null to clear)
         if (state.pending.hasOwnProperty('background_color') && state.pending.background_color !== state.original.background_color) {
@@ -298,6 +322,9 @@ function wireEditFields() {
             if (state.pending.hasOwnProperty('background_path')) {
                 await setProjectBackground(state.id, state.pending.background_path);
             }
+
+            // TEMPORARY !!!!!!!!!!!!!!
+            // console.log('updateProject patch =', JSON.stringify(patch));
 
             // 2) Persist text + color
             if (Object.keys(patch).length) await updateProject(state.id, patch);
@@ -312,11 +339,17 @@ function wireEditFields() {
             sendToParent('project-bg-commit', { color: commit.color || null, path: commit.path || null });
 
             // Snapshot new originals
+            // force inputs and pickers to the saved values
+            if (state.fpStart) state.fpStart.setDate(startVal || null, true);
+            if (state.fpDue) state.fpDue.setDate(dueVal || null, true);
+            if (fStart) fStart.value = startVal || '';
+            if (fDue) fDue.value = dueVal || '';
+
             state.original = {
                 title: fTitle?.value || '',
                 description: fDesc?.value || '',
-                start_date: fStart?.value || null,
-                due_date: fDue?.value || null,
+                start_date: startVal || null,
+                due_date: dueVal || null,
                 background_color: commit.color || null,
                 background: commit.path || null
             };
@@ -360,25 +393,76 @@ function wireEditFields() {
 
 /* ========= Date constraints ========= */
 function enforceDateBounds() {
-    const start = fStart?.value ? new Date(fStart.value) : null;
-    const due = fDue?.value ? new Date(fDue.value) : null;
+    const start = state.fpStart?.selectedDates?.[0] || null;
+    const due = state.fpDue?.selectedDates?.[0] || null;
     if (state.fpDue) state.fpDue.set('minDate', start || null);
     if (state.fpStart) state.fpStart.set('maxDate', due || null);
 }
 
 function validateDates() {
-    const s = fStart?.value ? new Date(fStart.value) : null;
-    const d = fDue?.value ? new Date(fDue.value) : null;
-    if (s && d && d < s) { alert('Due date cannot be earlier than start date.'); return false; }
+    const toUtcDate = (v) => v ? new Date(`${v}T00:00:00Z`) : null;
+    const sStr = state.fpStart?.selectedDates?.[0]
+        ? state.fpStart.formatDate(state.fpStart.selectedDates[0], 'Y-m-d')
+        : (fStart?.value || '');
+    const dStr = state.fpDue?.selectedDates?.[0]
+        ? state.fpDue.formatDate(state.fpDue.selectedDates[0], 'Y-m-d')
+        : (fDue?.value || '');
+    const s = toUtcDate(sStr);
+    const d = toUtcDate(dStr);
+    if (s && d && d < s) {
+        alert('Due date cannot be earlier than start date.');
+        return false;
+    }
     return true;
 }
+
 
 /* ========= Flatpickr ========= */
 function setupFlatpickr() {
     if (!window.flatpickr) return;
     const locale = { firstDayOfWeek: 1 };
-    state.fpStart = window.flatpickr('#f_start', { dateFormat: 'Y-m-d', allowInput: true, locale, onChange: enforceDateBounds });
-    state.fpDue = window.flatpickr('#f_due', { dateFormat: 'Y-m-d', allowInput: true, locale, onChange: enforceDateBounds });
+
+    const markDirtyFromPicker = () => setDirty(true);
+
+    state.fpStart = window.flatpickr('#f_start', {
+        dateFormat: 'Y-m-d',        // value saved/read from the hidden original input
+        altInput: true,             // show a pretty input to the user
+        altFormat: 'd.m.Y',         // visible format: 20.10.2025
+        allowInput: true,
+        locale,
+        weekNumbers: true,
+        onChange: enforceDateBounds
+    });
+
+    state.fpDue = window.flatpickr('#f_due', {
+        dateFormat: 'Y-m-d',
+        altInput: true,
+        altFormat: 'd.m.Y',
+        allowInput: true,
+        locale,
+        weekNumbers: true,
+        onChange: enforceDateBounds
+    });
+}
+
+/* ========= Date clear buttons ========= */
+function wireDateClears() {
+    const btnClearStart = document.getElementById('f_start_clear');
+    const btnClearDue = document.getElementById('f_due_clear');
+
+    btnClearStart?.addEventListener('click', () => {
+        state.fpStart?.clear();
+        if (fStart) fStart.value = '';
+        setDirty(true);
+        enforceDateBounds();
+    });
+
+    btnClearDue?.addEventListener('click', () => {
+        state.fpDue?.clear();
+        if (fDue) fDue.value = '';
+        setDirty(true);
+        enforceDateBounds();
+    });
 }
 
 /* ========= Background ========= */

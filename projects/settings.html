@@ -161,12 +161,20 @@
                         </div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label class="block text-sm font-medium mb-1" for="f_start">Start date</label>
+                                <div class="flex items-center justify-between">
+                                    <label class="block text-sm font-medium mb-1" for="f_start">Start date</label>
+                                    <button id="f_start_clear" type="button"
+                                        class="text-xs text-gray-500 hover:text-gray-700">Clear</button>
+                                </div>
                                 <input id="f_start" type="text" inputmode="none"
                                     class="project-field w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500" />
                             </div>
                             <div>
-                                <label class="block text-sm font-medium mb-1" for="f_due">Due date</label>
+                                <div class="flex items-center justify-between">
+                                    <label class="block text-sm font-medium mb-1" for="f_due">Due date</label>
+                                    <button id="f_due_clear" type="button"
+                                        class="text-xs text-gray-500 hover:text-gray-700">Clear</button>
+                                </div>
                                 <input id="f_due" type="text" inputmode="none"
                                     class="project-field w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500" />
                             </div>
