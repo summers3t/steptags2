@@ -14,11 +14,11 @@ import {
     removeMember,
     softDeleteProject,
     sendInviteEmail,
-    // NEW:
     getMembership,
     listProjectInvites,
     resendProjectInvite,
-    revokeProjectInvite
+    revokeProjectInvite,
+    listProjectActivity
 } from './api.js';
 import { supabase } from './supabase.js';
 
@@ -88,10 +88,80 @@ const state = {
     pendingRemovals: new Map(),
     selectedChip: null,
     membership: null,        // { role, status }
-    invites: []              // cached pending invites
+    invites: [],             // Cached pending invites
+    activity: [],             // Cached activity items
+    nameCache: new Map(),     // UserId -> display name/email
+
+    // Queued member role edits (user_id -> { from, to })
+    roleEdits: new Map(),
+
+    // Flag to refresh members after saving queued edits
+    needsMemberRefresh: false
 };
 
+function kindLabel(k) {
+    const map = {
+        invite_created: 'Invite created',
+        invite_resent: 'Invite resent',
+        invite_revoked: 'Invite revoked',
+        invite_expired: 'Invite expired',
+        invite_accepted: 'Invite accepted',
+        member_role_changed: 'Role changed',
+        member_removed: 'Member removed'
+    };
+    return map[k] || k;
+}
+
+function timeAgo(iso) {
+    try {
+        const d = new Date(iso);
+        const s = Math.floor((Date.now() - d.getTime()) / 1000);
+        if (s < 60) return `${s}s ago`;
+        const m = Math.floor(s / 60);
+        if (m < 60) return `${m}m ago`;
+        const h = Math.floor(m / 60);
+        if (h < 24) return `${h}h ago`;
+        const dd = Math.floor(h / 24);
+        return `${dd}d ago`;
+    } catch { return ''; }
+}
+
+
 function setDirty(on = true) { state.dirty = !!on; if (saveBtn) saveBtn.disabled = !state.dirty; }
+
+function computeCurrentDates() {
+    const startVal = state.fpStart?.selectedDates?.[0]
+        ? state.fpStart.formatDate(state.fpStart.selectedDates[0], 'Y-m-d')
+        : (fStart?.value || null);
+    const dueVal = state.fpDue?.selectedDates?.[0]
+        ? state.fpDue.formatDate(state.fpDue.selectedDates[0], 'Y-m-d')
+        : (fDue?.value || null);
+    return { startVal, dueVal };
+}
+
+// Recompute "dirty" based on real differences (title/desc/dates/bg/roleEdits)
+function recomputeDirty() {
+    // 1) Text fields
+    const titleDirty = !!(fTitle && fTitle.value !== state.original.title);
+    const descDirty = !!(fDesc && fDesc.value !== state.original.description);
+
+    // 2) Dates
+    const { startVal, dueVal } = computeCurrentDates();
+    const startDirty = (startVal ?? null) !== (state.original.start_date ?? null);
+    const dueDirty = (dueVal ?? null) !== (state.original.due_date ?? null);
+
+    // 3) Background
+    const hasClrFlag = Object.prototype.hasOwnProperty.call(state.pending, 'background_color');
+    const hasPathFlag = Object.prototype.hasOwnProperty.call(state.pending, 'background_path');
+    const bgColorDirty = hasClrFlag ? (state.pending.background_color !== state.original.background_color) : false;
+    const bgPathDirty = hasPathFlag ? (state.pending.background_path !== state.original.background) : false;
+
+    // 4) Role edits
+    const roleDirty = !!(state.roleEdits && state.roleEdits.size);
+
+    setDirty(titleDirty || descDirty || startDirty || dueDirty || bgColorDirty || bgPathDirty || roleDirty);
+}
+
 
 /* ========= Init ========= */
 document.addEventListener('DOMContentLoaded', init);
@@ -136,8 +206,14 @@ async function init() {
         pendingBox?.classList.remove('hidden');
         await hydrateInvites?.();
         wireInvitesRealtime?.();
+
+        // Activity (admin/creator only)
+        await hydrateActivity?.();
+        wireActivityRealtime?.();
     } else {
         pendingBox?.classList.add('hidden');
+        // Ensure activity panel stays hidden if dynamically created earlier
+        document.getElementById('activityPanel')?.classList.add('hidden');
     }
 
     // 6) Remaining UI wiring
@@ -193,10 +269,18 @@ function wireMembersRealtime() {
         .on('postgres_changes',
             { event: '*', schema: 'public', table: 'project_members', filter: `project_id=eq.${state.id}` },
             async (_payload) => {
-                try { await hydrateMembers(); } finally {
+                try {
+                    // Defer list refresh while there are unsaved edits
+                    if (state.dirty || (state.roleEdits && state.roleEdits.size)) {
+                        state.needsMemberRefresh = true;
+                        return;
+                    }
+                    await hydrateMembers();
+                } finally {
                     if (window.feather) try { window.feather.replace({ elements: membersList }); } catch { }
                 }
-            })
+            }
+        )
         .on('postgres_changes',
             { event: 'DELETE', schema: 'public', table: 'project_members', filter: `project_id=eq.${state.id}` },
             (payload) => {
@@ -477,8 +561,11 @@ function renderMemberRow(m) {
 
     // ===== Role select permissions =====
     if (iAmCreator) {
-        // Creator: can change anyone (self-protection handled server-side)
-        // no UI restrictions
+        // Creator: can change anyone EXCEPT themselves
+        if (isSelf && isCreator) {
+            roleSel.disabled = true; // lock creator’s own role
+        }
+        // else: creator can edit others freely
     } else if (iAmAdmin) {
         // Admin: cannot touch creator/admin/owner; can toggle member <-> guest only
         if (isCreator || targetIsAdmin) {
@@ -509,19 +596,31 @@ function renderMemberRow(m) {
         removeBtn?.remove();
     }
 
-    // Change handler
-    roleSel?.addEventListener('change', async () => {
+    // Initialize a stable baseline for comparison
+    roleSel?.setAttribute('data-prev', role);
+
+    // Change handler: queue only, no DB writes here
+    roleSel?.addEventListener('change', () => {
         const prev = roleSel.getAttribute('data-prev') || role;
         const next = roleSel.value;
-        try {
-            await updateMemberRole(state.id, user_id, next);
-            roleSel.setAttribute('data-prev', next);
-            toast('Role updated');
-        } catch (e) {
-            console.error('updateMemberRole', e);
-            roleSel.value = prev;
-            toast('Reverted');
+
+        if (next === prev) {
+            // No change → remove from queue & clear highlight
+            state.roleEdits.delete(user_id);
+            li.classList.remove('ring-2', 'ring-amber-300', 'bg-amber-50/30');
+        } else {
+            // Queue the change and visually mark the row
+            state.roleEdits.set(user_id, { from: prev, to: next });
+            li.classList.add('ring-2', 'ring-amber-300', 'bg-amber-50/30');
         }
+
+        // // Mark form dirty and defer realtime refresh to avoid flicker
+        // setDirty(true);
+        // state.needsMemberRefresh = true;
+
+        // Re-evaluate dirtiness; if all role edits are reverted, Save disables again
+        recomputeDirty();
+        state.needsMemberRefresh = true;
     });
 
     if (window.feather) window.feather.replace({ elements: [removeBtn] });
@@ -552,6 +651,161 @@ function rebindMemberRow(li, userId) {
     const btn = li.querySelector('.member-remove');
     btn?.addEventListener('click', () => startSoftRemove(li, userId));
     if (window.feather) window.feather.replace({ elements: [btn] });
+}
+
+async function hydrateActivity() {
+    try {
+        const rows = await listProjectActivity(state.id, { limit: 30 });
+        state.activity = Array.isArray(rows) ? rows : [];
+    } catch (e) {
+        console.error('listProjectActivity', e);
+        state.activity = [];
+    }
+    renderActivity();
+}
+
+// async function nameFor(userId) {
+//     if (!userId) return ''; // system/trigger
+//     try {
+//         const prof = await getProfile(userId);
+//         return (prof?.display_name || prof?.email || '').trim();
+//     } catch { return ''; }
+// }
+
+async function displayNameFor(userId) {
+    if (!userId) return '';
+    const cache = state.nameCache;
+    if (cache?.has(userId)) return cache.get(userId);
+    try {
+        const prof = await getProfile(userId);
+        const nm = (prof?.display_name || prof?.email || `user:${userId.slice(0, 8)}`).trim();
+        cache?.set(userId, nm);
+        return nm;
+    } catch {
+        const nm = `user:${userId.slice(0, 8)}`;
+        cache?.set(userId, nm);
+        return nm;
+    }
+}
+
+function renderActivity() {
+    // Ensure container exists (dynamic; no HTML edits required)
+    let panel = document.getElementById('activityPanel');
+    if (!panel) {
+        panel = document.createElement('section');
+        panel.id = 'activityPanel';
+        panel.className = 'mt-4 rounded-lg border bg-white';
+        const anchor = pendingBox?.parentElement || membersList?.parentElement || document.body;
+        anchor.appendChild(panel);
+    }
+
+    const isAdminNow = isAdmin() || (state.project?.created_by && state.currentUserId === state.project.created_by);
+    panel.classList.toggle('hidden', !isAdminNow);
+
+    // Header + refresh
+    panel.innerHTML = `
+    <div class="flex items-center justify-between px-3 py-2 border-b">
+      <h3 class="text-sm font-semibold">Recent activity</h3>
+      <div class="flex items-center gap-2">
+        <button id="activityRefresh"
+          class="text-xs px-2 py-1 rounded-md border border-gray-300 hover:bg-white">Refresh</button>
+      </div>
+    </div>
+    <ul id="activityList" class="divide-y"></ul>
+  `;
+
+    const list = panel.querySelector('#activityList');
+    if (!state.activity.length) {
+        list.innerHTML = `<li class="px-3 py-3 text-sm text-gray-500">No activity yet.</li>`;
+        panel.querySelector('#activityRefresh')?.addEventListener('click', hydrateActivity);
+        return;
+    }
+
+    // Render rows (lazy name resolution for actor + target)
+    list.innerHTML = '';
+    const frag = document.createDocumentFragment();
+
+    for (const row of state.activity) {
+        const li = document.createElement('li');
+        li.className = 'px-3 py-2 text-sm flex items-start justify-between gap-2';
+
+        // Primary line
+        const label = kindLabel(row.kind);
+        const when = timeAgo(row.created_at);
+
+        // Secondary meta (short form)
+        const metaBits = [];
+        const m = row.meta || {};
+        if (m.email) metaBits.push(escapeHtml(m.email));
+
+        // Target user placeholder -> resolved async
+        if (m.target_user_id) {
+            const short = m.target_user_id.slice(0, 8);
+            metaBits.push(
+                `<span class="act-target" data-uid="${short}" data-full-uid="${m.target_user_id}">user:${short}</span>`
+            );
+        }
+
+        if (m.new_role && m.old_role) metaBits.push(`${escapeHtml(m.old_role)} → ${escapeHtml(m.new_role)}`);
+        if (m.expires_at) {
+            try {
+                metaBits.push(`exp: ${new Date(m.expires_at).toLocaleDateString()}`);
+            } catch { /* noop */ }
+        }
+
+        li.innerHTML = `
+      <div class="min-w-0">
+        <p class="font-medium">${escapeHtml(label)}</p>
+        <p class="text-xs text-gray-600">${metaBits.join(' • ')}</p>
+      </div>
+      <div class="text-xs text-gray-500 whitespace-nowrap">${escapeHtml(when)}</div>
+    `;
+
+        frag.appendChild(li);
+
+        // Resolve actor name asynchronously (don’t block paint)
+        (async () => {
+            const nm = await displayNameFor(row.actor_id);
+            if (!nm) return;
+            const p = li.querySelector('p.font-medium');
+            if (p && !p.dataset.actor) {
+                p.dataset.actor = '1';
+                p.innerHTML = `${escapeHtml(label)} <span class="text-gray-500 font-normal">by ${escapeHtml(nm)}</span>`;
+            }
+        })();
+
+        // Resolve target user name asynchronously
+        (async () => {
+            const span = li.querySelector('.act-target');
+            if (!span) return;
+            const uid = span.getAttribute('data-full-uid');
+            const nm = await displayNameFor(uid);
+            if (nm) span.textContent = nm;
+        })();
+    }
+
+    list.appendChild(frag);
+    panel.querySelector('#activityRefresh')?.addEventListener('click', hydrateActivity);
+}
+
+
+function wireActivityRealtime() {
+    if (!supabase || !state.id) return;
+    const ch = supabase.channel(`activity:${state.id}`)
+        .on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: 'project_audit_log',
+            filter: `project_id=eq.${state.id}`
+        }, async (_payload) => {
+            // Don’t clobber in-progress edits; just refresh view quickly
+            try {
+                const isDirty = state.dirty || (state._roleChanges && state._roleChanges.size);
+                if (isDirty) return; // respect your current pattern
+                await hydrateActivity();
+            } catch { }
+        })
+        .subscribe();
 }
 
 /* ========= Invites creation ========= */
@@ -605,15 +859,16 @@ function wireInvites() {
 
 /* ========= Edit fields ========= */
 function wireEditFields() {
-    const onAnyChange = () => setDirty(true);
+    const onAnyChange = () => recomputeDirty();
 
     [fTitle, fDesc, fStart, fDue].forEach(el => {
         el?.addEventListener('input', onAnyChange);
         el?.addEventListener('change', () => {
-            setDirty(true);
             if (el === fStart || el === fDue) enforceDateBounds();
+            recomputeDirty();
         });
     });
+
 
     saveBtn?.addEventListener('click', async (e) => {
         e.preventDefault();
@@ -639,17 +894,26 @@ function wireEditFields() {
         }
 
         try {
+            // 1) Persist background path first (can be null to clear)
             if (state.pending.hasOwnProperty('background_path')) {
                 await setProjectBackground(state.id, state.pending.background_path);
             }
 
+            // 2) Persist project text/color
             if (Object.keys(patch).length) await updateProject(state.id, patch);
 
+            // 3) NEW: apply queued member role edits (sequential for clearer error reporting)
+            if (state.roleEdits && state.roleEdits.size) {
+                for (const [userId, { to }] of state.roleEdits.entries()) {
+                    await updateMemberRole(state.id, userId, to);
+                }
+            }
+
+            // 4) Commit snapshot / UI reflect (unchanged)
             const commit = {
                 color: state.pending.hasOwnProperty('background_color') ? state.pending.background_color : state.original.background_color,
                 path: state.pending.hasOwnProperty('background_path') ? state.pending.background_path : state.original.background
             };
-
             sendToParent('project-bg-commit', { color: commit.color || null, path: commit.path || null });
 
             if (state.fpStart) state.fpStart.setDate(startVal || null, true);
@@ -683,12 +947,25 @@ function wireEditFields() {
             }
             bgClear?.classList.toggle('hidden', !state.original.background && !state.original.background_color);
 
+            // 5) NEW: clear role edit marks & queue
+            try {
+                $$('#membersList > li').forEach(li => li.classList.remove('ring-2', 'ring-amber-300', 'bg-amber-50/30'));
+            } catch { }
+            state.roleEdits.clear();
+
+            // Reset general pending
             state.pending = {};
             setDirty(false);
 
             if (pTitle) pTitle.textContent = fTitle?.value || 'Untitled project';
             if (pDesc) pDesc.textContent = fDesc?.value || '';
             if (pDue) pDue.textContent = fDue?.value ? `Due ${fmtHuman(fDue?.value)}` : 'No due date';
+
+            // 6) NEW: perform deferred members refresh now
+            if (state.needsMemberRefresh) {
+                try { await hydrateMembers(); } catch { }
+                state.needsMemberRefresh = false;
+            }
 
             toast('Saved');
         } catch (e2) {
@@ -759,8 +1036,8 @@ function wireDateClears() {
     btnClearStart?.addEventListener('click', () => {
         state.fpStart?.clear();
         if (fStart) fStart.value = '';
-        setDirty(true);
         enforceDateBounds();
+        recomputeDirty();
     });
 
     btnClearDue?.addEventListener('click', () => {
@@ -805,7 +1082,7 @@ function wireBackground() {
             highlightChip(btn);
             bgPreview?.classList.add('hidden');
             bgClear?.classList.remove('hidden');
-            setDirty(true);
+            recomputeDirty();
             sendToParent('preview:bg-color', { color });
         });
     });
@@ -832,7 +1109,7 @@ function wireBackground() {
             const url = await getSignedFileURL('project-backgrounds', stored.path);
             state.pending.background_color = null;
             state.pending.background_path = stored.path;
-            setDirty(true);
+            recomputeDirty();
             if (url) sendToParent('preview:bg-image', { url });
             toast('Background uploaded.');
         } catch (err) {
@@ -852,13 +1129,20 @@ function wireBackground() {
         state.pending.background_color = null;
         highlightChip(null);
         togglePopovers(null);
-        setDirty(true);
+        recomputeDirty();
         sendToParent('preview:bg-clear', {});
     });
 }
 
 /* ========= Close / Delete ========= */
 function closeAndDiscard() {
+    // Clear local pending role edits & visual highlights (no DB writes)
+    try {
+        state.roleEdits.clear();
+        state.needsMemberRefresh = false;
+        $$('#membersList > li').forEach(li => li.classList.remove('ring-2', 'ring-amber-300', 'bg-amber-50/30'));
+    } catch { }
+
     if (state.original.background) {
         getSignedFileURL('project-backgrounds', state.original.background)
             .then((url) => sendToParent('preview:bg-image', { url: url || null }))

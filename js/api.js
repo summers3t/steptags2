@@ -512,3 +512,17 @@ export async function resendProjectInvite(inviteId) {
   }
   return row;
 }
+
+// Read recent activity (admin/creator will have access via RLS on the view)
+export async function listProjectActivity(projectId, { limit = 20, since = null } = {}) {
+  const q = supabase
+    .from('v_project_activity')
+    .select('project_id, created_at, actor_id, kind, ref_table, ref_id, meta')
+    .eq('project_id', projectId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (since) q.gte('created_at', since);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data || [];
+}
