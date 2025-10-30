@@ -15,14 +15,21 @@ export function dbToUiStatus(s) {
 }
 
 /* ========== Profiles ========== */
+export function getPublicFileURL(bucket, path) {
+  try { return supabase.storage.from(bucket).getPublicUrl(path).data?.publicUrl || ''; }
+  catch { return ''; }
+}
+
 export async function getProfile(userId) {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id,email,display_name,avatar_path')
+    .select('id,email,display_name,avatar_path,avatar_url')
     .eq('id', userId)
     .maybeSingle();
   if (error) throw error;
-  return data || null;
+  if (!data) return null;
+  const avatar = data.avatar_url || (data.avatar_path ? getPublicFileURL('avatars', data.avatar_path) : '');
+  return { ...data, avatar };
 }
 
 /* ========== Projects & Membership ========== */
@@ -258,16 +265,13 @@ export async function fetchProfilesMap(userIds = []) {
   if (!ids.length) return new Map();
   const { data, error } = await supabase
     .from('profiles')
-    .select('id,display_name,avatar_path,email')
+    .select('id,display_name,avatar_path,avatar_url,email')
     .in('id', ids);
   if (error) throw error;
   const m = new Map();
   for (const r of data || []) {
-    m.set(r.id, {
-      name: r.display_name || r.email || 'User',
-      avatar: r.avatar_path || '',
-      email: r.email || ''
-    });
+    const avatar = r.avatar_url || (r.avatar_path ? getPublicFileURL('avatars', r.avatar_path) : '');
+    m.set(r.id, { name: r.display_name || r.email || 'User', avatar, email: r.email || '' });
   }
   return m;
 }
@@ -307,38 +311,66 @@ export async function listProjectMembers(projectId) {
   }));
 }
 
-export async function listProjectInvites(projectId) {
-  const { data, error } = await supabase
-    .from('project_member_invites')
-    .select('id,email,role,status,created_at,token')
-    .eq('project_id', projectId)
-    .order('created_at', { ascending: true });
+export async function listProjectInvites(projectId, { includeAccepted = false } = {}) {
+  const { data, error } = await supabase.rpc('list_pending_invites', {
+    p_project_id: projectId,
+    p_include_accepted: !!includeAccepted
+  });
   if (error) throw error;
   return data || [];
 }
 
-function randomToken(len = 40) {
-  const bytes = crypto.getRandomValues(new Uint8Array(len));
-  const alphabet = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  return Array.from(bytes, b => alphabet[b % alphabet.length]).join('');
-}
 
+// function randomToken(len = 40) {
+//   const bytes = crypto.getRandomValues(new Uint8Array(len));
+//   const alphabet = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+//   return Array.from(bytes, b => alphabet[b % alphabet.length]).join('');
+// }
+
+// UUID tokens are generated in DB (gen_random_uuid()). Do not generate client-side.
 export async function inviteMemberByEmail(projectId, email, role = 'member') {
-  const token = randomToken(40);
   const { data: auth } = await supabase.auth.getUser();
   const uid = auth?.user?.id;
   if (!uid) throw new Error('Not authenticated');
 
+  // Create invite (token generated server-side)
   const { data, error } = await supabase
     .from('project_member_invites')
-    .insert({ project_id: projectId, email, role, token, invited_by: uid })
-    .select('id,email,role,status,created_at,token')
+    .insert({ project_id: projectId, email, role, invited_by: uid })
+    .select('id,project_id,email,role,status,created_at,token,expires_at')
     .single();
   if (error) throw error;
+  if (!data?.token) throw new Error('Invite created without token. Ensure token has DEFAULT gen_random_uuid().');
 
-  const link = `${location.origin}/projects/project.html?id=${encodeURIComponent(projectId)}&invite=${encodeURIComponent(token)}`;
-  return { ...data, link };
+  // Human-readable labels (only existing columns)
+  let inviter = '';
+  try {
+    const { data: prof } = await supabase
+      .from('profiles')
+      .select('display_name,email')
+      .eq('id', uid)
+      .maybeSingle();
+    inviter = (prof?.display_name || prof?.email || '').trim();
+  } catch { }
+
+  let projectName = '';
+  try {
+    const { data: proj } = await supabase
+      .from('projects')
+      .select('title')
+      .eq('id', projectId)
+      .maybeSingle();
+    projectName = (proj?.title || '').trim();
+  } catch { }
+
+  const qs = new URLSearchParams({ token: data.token });
+  if (inviter) qs.set('inviter', inviter);
+  if (projectName) qs.set('project', projectName);
+  const link = `${location.origin}/invite.html?${qs.toString()}`;
+
+  return { ...data, link, inviter, projectName };
 }
+
 
 export async function updateMemberRole(projectId, userId, role) {
   const { error } = await supabase
@@ -360,33 +392,12 @@ export async function removeMember(projectId, userId) {
   return { user_id: userId, status: 'removed' };
 }
 
-export async function acceptInvite(projectId, token) {
-  const cli = supabase._withHeaders({ 'x-invite-token': token });
-  const { data: invite, error: e1 } = await cli
-    .from('project_member_invites')
-    .select('id,email,role,status')
-    .eq('project_id', projectId)
-    .eq('token', token)
-    .maybeSingle();
-  if (e1) throw e1;
-  if (!invite || invite.status !== 'pending') throw new Error('Invite invalid');
-
-  const { data: auth } = await supabase.auth.getUser();
-  const uid = auth?.user?.id;
-  if (!uid) throw new Error('Not authenticated');
-
-  const { error: e2 } = await supabase
-    .from('project_members')
-    .insert({ project_id: projectId, user_id: uid, role: invite.role, status: 'active' }, { returning: 'minimal' });
-  if (e2 && !String(e2.message || '').includes('duplicate')) throw e2;
-
-  const { error: e3 } = await supabase
-    .from('project_member_invites')
-    .update({ status: 'accepted', accepted_at: nowISO() }, { returning: 'minimal' })
-    .eq('id', invite.id);
-  if (e3) throw e3;
-
-  return { ok: true };
+export async function acceptInvite(token) {
+  if (!token) throw new Error('Missing token');
+  const { data: rpc, error } = await supabase.rpc('accept_invite', { p_token: token });
+  if (error) throw error;
+  // rpc = { project_id: '...' }
+  return { ok: true, project_id: rpc?.project_id || null };
 }
 
 // --- Activities: list (read-only) ---
@@ -450,4 +461,54 @@ export async function uploadBackgroundFile(projectId, file) {
     .upload(path, file, { upsert: false, contentType: file.type });
   if (error) throw error;
   return { path };
+}
+
+export async function sendInviteEmail({ email, link, projectName, inviterName, role, expiresAtISO }) {
+  const resp = await fetch('/api/invite-send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, link, projectName, inviterName, role, expiresAtISO })
+  });
+  const json = await resp.json();
+  if (!resp.ok) throw new Error(json?.error || 'Email send failed');
+  return json;
+}
+
+
+export async function inviteAndEmail(projectId, email, role = 'member') {
+  const invite = await inviteMemberByEmail(projectId, email, role);
+  const expiresAtISO = invite?.expires_at || null;
+  await sendInviteEmail({
+    email,
+    link: invite.link,
+    projectName: invite.projectName || '',
+    inviterName: invite.inviter || '',
+    role,
+    expiresAtISO
+  });
+  return invite;
+}
+
+export async function revokeProjectInvite(inviteId) {
+  const { error } = await supabase.rpc('revoke_invite', { p_invite_id: inviteId });
+  if (error) throw error;
+  return true;
+}
+
+export async function resendProjectInvite(inviteId) {
+  const { data, error } = await supabase.rpc('resend_invite', { p_invite_id: inviteId });
+  if (error) throw error;
+  let row = Array.isArray(data) ? data[0] : data;
+
+  // Fallback: ensure we have fresh token/email from DB
+  if (!row?.token || !row?.email) {
+    const { data: fetched, error: e2 } = await supabase
+      .from('project_member_invites')
+      .select('email, token, expires_at')
+      .eq('id', inviteId)
+      .single();
+    if (e2) throw e2;
+    row = fetched;
+  }
+  return row;
 }

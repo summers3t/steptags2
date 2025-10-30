@@ -151,7 +151,7 @@
 
     <script type="module" src="/js/supabase.js"></script>
     <script type="module">
-        import { redirectIfAuthed } from '/js/supabase.js';
+        import { redirectIfAuthed, getRedirectTarget } from '/js/supabase.js';
         import { signInWithGoogle, emailSignIn } from '/js/auth.js';
 
         await redirectIfAuthed();
@@ -164,7 +164,9 @@
             const fd = new FormData(form);
             try {
                 await emailSignIn(fd.get('email'), fd.get('password'));
-                location.replace('/dashboard.html');
+                // emailSignIn already redirects, but keep a defensive redirect:
+                const { getRedirectTarget } = await import('/js/supabase.js');
+                location.replace(getRedirectTarget('/dashboard.html'));
             } catch (err) {
                 const box = document.getElementById('auth-status');
                 box.textContent = err?.message || 'Sign-in failed.';

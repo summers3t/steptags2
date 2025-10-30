@@ -195,7 +195,7 @@
                                 class="rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500">
                                 <option value="member">Member</option>
                                 <option value="admin">Admin</option>
-                                <option value="viewer">Viewer</option>
+                                <option value="viewer">Guest</option>
                             </select>
                             <button id="addMemberBtn" type="button"
                                 class="inline-flex items-center gap-2 rounded-md px-4 py-2 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 btn-trans">
@@ -390,24 +390,24 @@
         });
 
         // Submit (client placeholder; real creation is in /js/newproject.js)
-        const statusBox = document.getElementById('project-status');
-        document.getElementById('project-form')?.addEventListener('submit', (e) => {
-            e.preventDefault();
-            const title = document.getElementById('project-name').value.trim();
-            if (!title) {
-                statusBox.textContent = 'Project name is required.';
-                statusBox.classList.remove('hidden');
-                statusBox.focus();
-                return;
-            }
-            if (document.getElementById('use-ai').checked) {
-                window.location.href = 'project-ai.html';
-                return;
-            }
-            statusBox.textContent = 'Project creation will be wired to the backend later.';
-            statusBox.classList.remove('hidden');
-            statusBox.focus();
-        });
+        // const statusBox = document.getElementById('project-status');
+        // document.getElementById('project-form')?.addEventListener('submit', (e) => {
+        //     e.preventDefault();
+        //     const title = document.getElementById('project-name').value.trim();
+        //     if (!title) {
+        //         statusBox.textContent = 'Project name is required.';
+        //         statusBox.classList.remove('hidden');
+        //         statusBox.focus();
+        //         return;
+        //     }
+        //     if (document.getElementById('use-ai').checked) {
+        //         window.location.href = 'project-ai.html';
+        //         return;
+        //     }
+        //     statusBox.textContent = 'Project creation will be wired to the backend later.';
+        //     statusBox.classList.remove('hidden');
+        //     statusBox.focus();
+        // });
     </script>
 
     <!-- App boot order: supabase -> api -> header -> page scripts -->

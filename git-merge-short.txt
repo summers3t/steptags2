@@ -1,0 +1,13 @@
+git status
+git fetch origin
+git checkout main
+git pull --ff-only origin main
+
+git merge --no-ff feat/sandbox -m "merge: feat/sandbox into main"
+
+git push origin main
+
+git checkout feat/sandbox
+git fetch origin
+git rebase origin/main
+git push --force-with-lease origin feat/sandbox

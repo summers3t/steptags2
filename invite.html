@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Invitation · StepTags Pro</title>
+  <meta name="description" content="Accept your StepTags Pro project invitation." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    html,
+    body {
+      height: 100%
+    }
+
+    body {
+      font-family: Inter, system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif
+    }
+
+    @media (prefers-reduced-motion:no-preference) {
+      .card-hover {
+        transition: transform .22s cubic-bezier(.22, .61, .36, 1), box-shadow .22s ease;
+        will-change: transform, box-shadow;
+      }
+
+      .card-hover:hover {
+        transform: translateY(-4px) translateX(1px);
+        box-shadow: 0 18px 40px -12px rgba(17, 24, 39, .25);
+      }
+    }
+
+    .gradient-text {
+      background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+  </style>
+  <script defer src="https://cdn.jsdelivr.net/npm/feather-icons@4.29.2/dist/feather.min.js"></script>
+</head>
+
+<body class="bg-gray-50 text-gray-900 antialiased">
+  <!-- Back button kept for reference, intentionally not rendered
+  <a href="index.html"
+     class="fixed top-4 left-4 inline-flex items-center gap-2 rounded-full bg-white/90 backdrop-blur px-3 py-2 text-gray-700 hover:text-indigo-700 shadow-sm border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+     aria-label="Back to home">
+    <i data-feather="arrow-left" class="w-5 h-5" aria-hidden="true"></i>
+    <span class="hidden sm:inline text-sm font-medium">Back</span>
+  </a>
+  -->
+
+  <main class="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <section class="w-full max-w-md bg-white p-8 rounded-2xl shadow-sm border border-gray-100 card-hover">
+      <header class="text-center mb-8">
+        <i data-feather="tag" class="w-12 h-12 text-indigo-600 mx-auto" aria-hidden="true"></i>
+        <h1 class="mt-4 text-3xl font-bold">Project <span class="gradient-text">Invitation</span></h1>
+        <p class="mt-2 text-sm text-gray-600">
+          You are invited to join a project on
+          <a href="index.html" class="text-indigo-600 hover:text-indigo-500 font-medium">StepTags</a>.
+        </p>
+        <p id="invite-context" class="mt-1 text-sm text-gray-700 hidden"></p>
+        <!-- Example runtime text:
+             “Accept this invite by <Inviter Name> to join the project <Project Name>.” -->
+      </header>
+
+      <div id="invite-status"
+        class="mb-4 hidden rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-sm px-3 py-2"
+        role="status"></div>
+
+      <div id="success-box"
+        class="mb-4 hidden rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800 text-sm px-3 py-2">
+        Invitation accepted. You can open the project now.
+      </div>
+
+      <div class="space-y-3">
+        <a id="open-project" href="#"
+          class="hidden w-full inline-flex justify-center items-center rounded-lg px-4 py-3 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/50">
+          Open project
+        </a>
+
+        <button id="try-again" type="button"
+          class="hidden w-full inline-flex justify-center items-center rounded-lg px-4 py-3 text-sm font-semibold text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500/50">
+          Try again
+        </button>
+
+        <a id="login-btn" href="login.html"
+          class="hidden w-full inline-flex justify-center items-center rounded-lg px-4 py-3 text-sm font-semibold text-indigo-700 bg-white border border-gray-300 hover:bg-indigo-600 hover:text-white hover:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50">
+          Log in to accept
+        </a>
+
+        <p id="auth-hint" class="hidden text-center text-sm text-gray-600">Or if you do not have an account:</p>
+
+        <a id="signup-btn" href="signup.html"
+          class="hidden w-full inline-flex justify-center items-center rounded-lg px-4 py-3 text-sm font-semibold text-indigo-700 bg-white border border-gray-300 hover:bg-indigo-600 hover:text-white hover:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50">
+          Create account
+        </a>
+      </div>
+
+      <p class="mt-6 text-xs text-gray-500 text-center">
+        If you did not expect this invitation, you can ignore this page.
+      </p>
+    </section>
+  </main>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => { window.feather && window.feather.replace(); });
+  </script>
+
+  <script type="module">
+    import { supabase } from '/js/supabase.js';
+    import { acceptInvite } from '/js/api.js';
+
+    const qs = new URLSearchParams(location.search);
+    const token = qs.get('token');
+
+    const statusBox = document.getElementById('invite-status');
+    const successBox = document.getElementById('success-box');
+    const openBtn = document.getElementById('open-project');
+    const tryBtn = document.getElementById('try-again');
+    const loginBtn = document.getElementById('login-btn');
+    const signupBtn = document.getElementById('signup-btn');
+    const authHint = document.getElementById('auth-hint');
+    const contextEl = document.getElementById('invite-context');
+
+    function show(el) { el.classList.remove('hidden'); }
+    function hide(el) { el.classList.add('hidden'); }
+    function setStatus(msg) { statusBox.textContent = msg; show(statusBox); }
+    function setAuthTargets() {
+      const ret = encodeURIComponent(location.href);
+      loginBtn.href = `/login.html?redirect=${ret}`;
+      signupBtn.href = `/signup.html?redirect=${ret}`;
+    }
+
+    // Optional: populate inviter/project context if present in URL (non-sensitive, cosmetic)
+    // e.g., /invite.html?token=...&inviter=Ilko&project=Roadmap
+    const inviter = qs.get('inviter');
+    const project = qs.get('project');
+    if (inviter || project) {
+      contextEl.textContent =
+        `Accept this invite${inviter ? ` by ${inviter}` : ''}${project ? ` to join the project ${project}` : ''}.`;
+      show(contextEl);
+    }
+
+    tryBtn.addEventListener('click', () => location.reload());
+
+    async function run() {
+      hide(successBox); hide(openBtn); hide(tryBtn); hide(loginBtn); hide(signupBtn); hide(authHint);
+      statusBox.classList.add('hidden');
+
+      if (!token) {
+        setStatus('Missing invite token.');
+        show(tryBtn);
+        return;
+      }
+
+      const { data: sess } = await supabase.auth.getSession();
+      if (!sess?.session) {
+        setStatus('Please log in to accept this invite.');
+        setAuthTargets();
+        show(loginBtn); show(authHint); show(signupBtn);
+        return;
+      }
+
+      try {
+        setStatus('Accepting invite…');
+        const res = await acceptInvite(token);
+        if (res?.project_id) {
+          successBox.classList.remove('hidden');
+          openBtn.href = `/projects/project.html?id=${encodeURIComponent(res.project_id)}`;
+          hide(statusBox);
+          show(openBtn);
+        } else {
+          setStatus('Invite accepted, but project id was not returned.');
+          show(tryBtn);
+        }
+      } catch (e) {
+        const msg = String(e?.message || e);
+
+        // Case: token email ≠ current session email
+        if (/this invite is for .* but you are logged in as/i.test(msg)) {
+          setStatus(msg);
+
+          // Offer “Switch account” (logout) preserving return to this page
+          const switchBtn = document.createElement('button');
+          switchBtn.className = "mt-3 w-full inline-flex justify-center items-center rounded-lg px-4 py-3 text-sm font-semibold text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500/50";
+          switchBtn.textContent = "Switch account to accept";
+          switchBtn.addEventListener('click', async () => {
+            try {
+              await supabase.auth.signOut();
+            } catch { }
+            location.replace(`/login.html?redirect=${encodeURIComponent(location.href)}`);
+          });
+
+          statusBox.insertAdjacentElement('afterend', switchBtn);
+          show(tryBtn);
+          return;
+        }
+
+        // Generic error fallback
+        setStatus(msg);
+        setAuthTargets();
+        show(loginBtn); show(authHint); show(signupBtn); show(tryBtn);
+      }
+    }
+
+    run();
+  </script>
+</body>
+
+</html>

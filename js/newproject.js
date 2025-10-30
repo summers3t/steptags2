@@ -1,61 +1,77 @@
 // C:\steptags2\js\newproject.js
 import { supabase, requireAuth } from './supabase.js'
-// Import createProject if you want to use the function from api.js, but since
-// the logic is simple and requires immediate project_members insert, we keep it here.
+import { uploadBackgroundFile, setProjectBackground } from './api.js'
 
 const session = await requireAuth()
 const userId = session.user.id
 
-const form = document.querySelector('#new-project-form')
+const form = document.querySelector('#project-form')
+const statusBox = document.getElementById('project-status')
+const showStatus = (msg) => {
+    if (!statusBox) return
+    statusBox.textContent = msg
+    statusBox.classList.remove('hidden')
+    statusBox.focus()
+}
+
 form?.addEventListener('submit', async (e) => {
     e.preventDefault()
 
-    // Disable form elements to prevent double submission
-    form.querySelectorAll('button, input').forEach(el => el.disabled = true);
+    // AI route
+    if (document.getElementById('use-ai')?.checked) {
+        location.replace('/project-ai.html')
+        return
+    }
 
+    // Read values BEFORE disabling (disabled fields are not included in FormData)
     const fd = new FormData(form)
-    const title = (fd.get('title') || '').toString().trim() || 'Untitled'
+    const title = (fd.get('title') || '').toString().trim()
+    if (!title) { showStatus('Project name is required.'); return }
+
     const description = (fd.get('description') || '').toString().trim() || null
-    const due_date = fd.get('due_date') || null
+    const start_date = (fd.get('start_date') || '').toString().trim() || null
+    const due_date = (fd.get('due_date') || '').toString().trim() || null
 
-    // 1. Create the Project
-    const { data: projectData, error: projectError } = await supabase.from('projects')
-        .insert({
-            title,
-            description,
-            due_date,
-            created_by: userId,
-            // Ensure updated_at is set for dashboard sorting
-            updated_at: new Date().toISOString()
-        })
-        .select('id')
-        .single()
+    // Now disable to prevent double-submit
+    const toDisable = form.querySelectorAll('button, input, textarea, select')
+    toDisable.forEach(el => { el.disabled = true })
 
-    if (projectError) {
-        alert(`Error creating project: ${projectError.message}`);
-        form.querySelectorAll('button, input').forEach(el => el.disabled = false); // Re-enable form
-        return;
+    try {
+        // 1) Create project. created_by defaults to auth.uid(); RLS with_check enforces it
+        const { data: proj, error: insErr } = await supabase
+            .from('projects')
+            .insert({ title, description, start_date, due_date })
+            .select('id')
+            .single()
+
+        if (insErr) { showStatus(`Error creating project: ${insErr.message}`); return }
+
+        const projectId = proj.id
+
+        // 2) Creator membership via AFTER INSERT trigger (ensure_creator_is_admin)
+        // No client insert into project_members needed.
+
+        // 3) Optional background upload if chosen
+        const bgFileInput = document.getElementById('bgFile')
+        const file = bgFileInput?.files?.[0]
+        if (file) {
+            if (!/^image\//.test(file.type) || file.size > 5 * 1024 * 1024) {
+                showStatus('Invalid background. Use PNG/JPG up to 5 MB.')
+            } else {
+                try {
+                    const stored = await uploadBackgroundFile(projectId, file) // { path }
+                    await setProjectBackground(projectId, stored.path)
+                } catch (bgErr) {
+                    console.warn('Background upload failed', bgErr) // non-fatal
+                }
+            }
+        }
+
+        // 4) Navigate to project
+        location.replace(`/projects/project.html?id=${projectId}`)
+    } catch (err) {
+        showStatus(err?.message || 'Unexpected error.')
+    } finally {
+        toDisable.forEach(el => { el.disabled = false })
     }
-
-    const projectId = projectData.id;
-
-    // 2. IMPORTANT: Insert the project creator as an 'owner' in project_members
-    // This satisfies the RLS policy and grants the creator full access.
-    const { error: memberError } = await supabase.from('project_members')
-        .insert({
-            project_id: projectId,
-            user_id: userId,
-            role: 'owner', // Default role for the creator
-            status: 'active'
-        });
-
-    if (memberError) {
-        console.error("Failed to insert owner membership:", memberError);
-        // Alert the user, but still navigate as the project is technically created.
-        // The user will be the creator, so they might still see it. RLS will ensure access.
-        alert(`Warning: Project created, but failed to set you as explicit owner. Please check the database. Error: ${memberError.message}`);
-    }
-
-    // 3. Navigate to the new project page
-    location.replace(`/projects/project.html?id=${projectId}`);
 })

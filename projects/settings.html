@@ -364,6 +364,36 @@
                                 class="px-3 py-2 rounded-md text-white bg-indigo-600 hover:bg-indigo-700 text-sm btn-trans">Invite</button>
                         </div>
                     </div>
+
+                    <!-- Pending invites (new) -->
+                    <div id="pendingBox" class="mb-4 hidden">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-sm font-semibold text-gray-700">
+                                Pending invites
+                                <span id="pendingCount"
+                                    class="ml-2 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">0</span>
+                            </h3>
+                            <button id="refreshPending"
+                                class="text-xs text-indigo-700 hover:text-indigo-900 underline">Refresh</button>
+                        </div>
+                        <ul id="pendingList" class="mt-2 divide-y rounded-md border border-amber-200 bg-amber-50/40">
+                            <!-- rows inserted by JS -->
+                            <!-- example:
+      <li class="flex items-center justify-between px-3 py-2">
+        <div class="min-w-0">
+          <p class="truncate text-sm font-medium text-gray-900">invitee@example.com</p>
+          <p class="text-xs text-gray-600">member • sent 2025-10-28</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button data-action="resend" data-id="…" class="text-xs px-2 py-1 rounded-md border border-gray-300 hover:bg-white">Resend</button>
+          <button data-action="revoke" data-id="…" class="text-xs px-2 py-1 rounded-md text-red-700 border border-red-300 hover:bg-red-50">Revoke</button>
+        </div>
+      </li>
+      -->
+                        </ul>
+                    </div>
+
+                    <!-- skeleton while loading -->
                     <ul id="sk-members" class="space-y-3 animate-pulse">
                         <li class="flex items-center justify-between p-3 rounded-lg border">
                             <div class="flex items-center gap-3">
@@ -376,8 +406,10 @@
                             <div class="h-8 w-28 bg-gray-200 rounded"></div>
                         </li>
                     </ul>
+
                     <ul id="membersList" class="space-y-3 hidden"></ul>
                 </div>
+
 
                 <!-- Items -->
                 <div id="tab-items" class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 hidden">

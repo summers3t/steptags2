@@ -14,7 +14,11 @@
   "description": "",
   "devDependencies": {
     "prettier": "^3.6.2",
+    "vercel": "^48.6.7",
     "vite": "^7.1.9"
   },
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "nodemailer": "^7.0.9"
+  }
 }

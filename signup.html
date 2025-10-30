@@ -177,10 +177,13 @@
     <!-- App wiring -->
     <script type="module" src="/js/supabase.js"></script>
     <script type="module">
-        import { redirectIfAuthed } from '/js/supabase.js'
+        import { redirectIfAuthed, getRedirectTarget } from '/js/supabase.js'
         import { emailSignUp, signInWithGoogle } from '/js/auth.js'
 
-        await redirectIfAuthed()
+        await redirectIfAuthed() // will use getRedirectTarget inside
+
+        // If the user clicks Google from signup, also preserve redirect:
+        document.querySelector('[data-google]')?.addEventListener('click', signInWithGoogle)
 
         const status = document.getElementById('signup-status')
         function showStatus(msg) { status.textContent = msg; status.classList.remove('hidden'); status.focus() }
